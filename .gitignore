@@ -1,0 +1,10 @@
+# 168 MB macOS installer — over GitHub's 100 MB per-file limit. Nothing here
+# needs it: the two weights it supplies are already subset into
+# assets/fonts/ and inlined as data URIs in index.html.
+SF-Compact.dmg
+
+# local web-server noise
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
