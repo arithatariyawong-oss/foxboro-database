@@ -4,9 +4,14 @@ import zipfile, json, gzip, base64, time, os, sys
 from xml.etree.ElementTree import iterparse
 
 NS = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
-ROOT = r"C:\Users\SESA407984\Desktop\FOXBORO"
-XLSX = os.path.join(ROOT, "FOX DATABASE.xlsx")
-OUT  = os.path.join(ROOT, "03 WEB", "data.js")
+# Resolved from this file's own location so a clone builds anywhere:
+#   build/  ->  the web folder  ->  the folder holding FOX DATABASE.xlsx
+# Point it elsewhere with:  python build/export_data.py "<path to .xlsx>"
+HERE = os.path.dirname(os.path.abspath(__file__))
+WEB  = os.path.dirname(HERE)
+ROOT = os.path.dirname(WEB)
+XLSX = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "FOX DATABASE.xlsx")
+OUT  = os.path.join(WEB, "data.js")
 
 def col_index(ref):
     n = 0
