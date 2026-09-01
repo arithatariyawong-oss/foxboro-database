@@ -1,0 +1,215 @@
+# -*- coding: utf-8 -*-
+"""Build the signal graph for the wiring diagram and write graph.js.
+
+Two sources meet here:
+
+  * data.js -- every block in the plant, and the parameter VALUES that name
+    another block ("V501_N7:05FT065.PNT", ":03FV042.BCALCO"). Each such value
+    is one wire: the named block's parameter drives this block's parameter.
+  * block_params.json -- B0193AX's parameter tables, which say whether a
+    parameter is an INPUT or an OUTPUT and whether it is connectable. That is
+    what puts a pin on the left or the right edge of a box, and in what order.
+
+A reference may or may not carry a compound. ":05FV065.BCALCO" means "in my
+own compound", so an unqualified name is resolved against the same CP first
+and only then anywhere -- getting that backwards silently wires loops in one
+unit to identically-named blocks in another (the plant reuses tag names
+across CPs, e.g. V501:05FRC065 and V501_N7:05FRC065).
+
+Output graph.js mirrors data.js: gzip + base64, inflated by the page with
+DecompressionStream.
+"""
+import base64, gzip, json, os, re, sys, time
+from collections import defaultdict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+WEB = os.path.dirname(HERE)
+DATA = os.path.join(WEB, "data.js")
+PARAMS = os.path.join(WEB, "block_params.json")
+OUT = os.path.join(WEB, "graph.js")
+
+t0 = time.time()
+raw = open(DATA, encoding="utf8").read()
+b64 = raw.split('"', 1)[1].rsplit('"', 1)[0]
+d = json.loads(gzip.decompress(base64.b64decode(b64)).decode("utf8"))
+N, H, C = d["n"], d["h"], d["c"]
+IDX = {h: i for i, h in enumerate(H) if h}
+BP = json.load(open(PARAMS, encoding="utf8"))
+print("data.js %d rows, block_params %d types (%.1fs)" % (N, len(BP), time.time() - t0))
+
+
+def dense(col):
+    """codes per row (-1 = empty), plus the column's dictionary"""
+    a = [-1] * N
+    sp = C[IDX[col]]
+    if not isinstance(sp, dict):
+        return a, []
+    v = sp["v"]
+    if "r" in sp:
+        row = 0
+        for k, dl in enumerate(sp["r"]):
+            row += dl
+            a[row] = v[k]
+    else:
+        for k, c in enumerate(v):
+            a[k] = c
+    return a, sp["d"]
+
+
+cpA, cpD = dense("CP NAME")
+nmA, nmD = dense("NAME")
+tyA, tyD = dense("TYPE")
+dsA, dsD = dense("DESCRP")
+ioA, ioD = dense("IOM_ID")
+pnA, pnD = dense("PNT_NO")
+arA, arD = dense("AREA")
+
+name = [nmD[c] if c >= 0 else "" for c in nmA]
+typ = [tyD[c] if c >= 0 else "" for c in tyA]
+
+# ---- resolve a reference to a row -------------------------------------
+by_full = {}                       # "COMPOUND:BLOCK" -> row
+by_short = defaultdict(list)       # "BLOCK"          -> rows
+for i, n in enumerate(name):
+    if not n:
+        continue
+    by_full.setdefault(n, i)
+    by_short[n.split(":")[-1]].append(i)
+
+REF = re.compile(r"^([A-Za-z0-9_]{0,32}):?([A-Za-z0-9_]{1,32})\.([A-Za-z0-9_]{1,16})$")
+SKIP_COLS = {"Source.Name", "VERNUM"}
+
+edges = []          # (src_row, src_param, dst_row, dst_param)
+seen = set()
+for ci, sp in enumerate(C):
+    if not isinstance(sp, dict) or H[ci] in SKIP_COLS:
+        continue
+    col = H[ci]
+    ok = {}
+    for k, v in enumerate(sp["d"]):
+        if "." not in v or len(v) > 72:
+            continue
+        try:
+            float(v)                      # 1.0 / 0.5 are constants, not refs
+            continue
+        except ValueError:
+            pass
+        m = REF.match(v)
+        if m:
+            ok[k] = m.groups()
+    if not ok:
+        continue
+    v, rr = sp["v"], sp.get("r")
+    row = 0
+    for k, code in enumerate(v):
+        row = row + rr[k] if rr else k
+        g = ok.get(code)
+        if not g:
+            continue
+        comp, blk, par = g
+        src = by_full.get("%s:%s" % (comp, blk)) if comp else None
+        if src is None:
+            cands = by_short.get(blk)
+            if not cands:
+                continue
+            same = [r for r in cands if cpA[r] == cpA[row]]   # own CP wins
+            src = (same or cands)[0]
+        # A block referencing its own parameter is a real wire, not noise:
+        # H101:01PIC130 has RSP = H101:01PIC130.SPT, and the ICC detail draws
+        # exactly that loop from the block's own SPT back into its RSP.
+        key = (src, par, row, col)
+        if key in seen:
+            continue
+        seen.add(key)
+        edges.append(key)
+
+print("parameter edges: %d  (%.1fs)" % (len(edges), time.time() - t0))
+
+# ---- the field ends: ECB <-> the I/O blocks bound to it -----------------
+# An AIN does not *reference* its FBM through a parameter — it names it by
+# IOM_ID, and the ECB carrying that DEV_ID is the block that stands for the
+# hardware. Wiring those in is what makes an ECB the source of every input
+# chain and the sink of every output chain, instead of the first AIN and the
+# last AOUT. IOMIDR is the redundant partner module and is wired too.
+irA, irD = dense("IOMIDR")
+dvA, dvD = dense("DEV_ID")
+
+dev_index = defaultdict(list)
+for i in range(N):
+    if typ[i].startswith("ECB") and dvA[i] >= 0:
+        dev_index[dvD[dvA[i]]].append(i)
+
+
+def ecb_for(dev, row):
+    """the ECB in this block's own CP wins; the plant reuses device ids"""
+    cands = dev_index.get(dev)
+    if not cands:
+        return None
+    same = [r for r in cands if cpA[r] == cpA[row]]
+    return (same or cands)[0]
+
+
+n_hw, n_missed = 0, 0
+for i in range(N):
+    t = typ[i]
+    if not t or t.startswith("ECB") or ioA[i] < 0 or not name[i]:
+        continue
+    # direction is the block's job: an *OUT block drives the field, the rest
+    # read it. AO/MAO are the two output types whose names do not say so.
+    is_out = "OUT" in t or t in ("AO", "MAO")
+    chan = pnD[pnA[i]] if pnA[i] >= 0 else ""
+    pin_ecb = ("CH " + chan) if chan else "DEV"
+    for pin_blk, arr, dic in (("IOM_ID", ioA, ioD), ("IOMIDR", irA, irD)):
+        if arr[i] < 0:
+            continue
+        e = ecb_for(dic[arr[i]], i)
+        if e is None:
+            n_missed += 1
+            continue
+        edges.append((i, pin_blk, e, pin_ecb) if is_out else (e, pin_ecb, i, pin_blk))
+        n_hw += 1
+
+print("hardware edges: %d  (%d I/O bindings had no ECB in the export)" % (n_hw, n_missed))
+print("edges total: %d  (%.1fs)" % (len(edges), time.time() - t0))
+
+# ---- keep only the blocks the diagram can reach -------------------------
+used = set()
+for s, _, t, _ in edges:
+    used.add(s)
+    used.add(t)
+for i in range(N):                      # field I/O is an endpoint worth having
+    if ioA[i] >= 0 and name[i]:
+        used.add(i)
+rows = sorted(used)
+remap = {r: k for k, r in enumerate(rows)}
+
+nodes = [[
+    name[r],                                    # 0 compound:block
+    typ[r],                                     # 1 block type
+    dsD[dsA[r]] if dsA[r] >= 0 else "",         # 2 description
+    cpD[cpA[r]] if cpA[r] >= 0 else "",         # 3 CP
+    arD[arA[r]] if arA[r] >= 0 else "",         # 4 area
+    ioD[ioA[r]] if ioA[r] >= 0 else "",         # 5 FBM id
+    pnD[pnA[r]] if pnA[r] >= 0 else "",         # 6 point number
+    r,                                          # 7 row in data.js — the key
+] for r in rows]                                #   Properties reads values by
+elist = [[remap[s], sp, remap[t], tp] for s, sp, t, tp in edges]
+
+# ---- the pin reference, trimmed to what the diagram needs ---------------
+pins = {}
+for t, b in BP.items():
+    ins = [p["name"] for p in b["params"] if p["section"] == "INPUTS" and p["con"]]
+    outs = [p["name"] for p in b["params"] if p["section"] == "OUTPUTS" and p["con"]]
+    desc = {p["name"]: p["desc"] for p in b["params"] if p["desc"]}
+    sect = {p["name"]: p["section"][0] for p in b["params"]}      # I / O / D
+    pins[t] = {"t": b["title"], "i": ins, "o": outs, "d": desc, "s": sect}
+
+payload = {"nodes": nodes, "edges": elist, "pins": pins}
+js = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf8")
+gz = gzip.compress(js, 9)
+enc = base64.b64encode(gz).decode("ascii")
+open(OUT, "w", encoding="utf8").write('window.FOX_GRAPH_B64="%s";\n' % enc)
+
+print("nodes %d, edges %d, pin tables %d" % (len(nodes), len(elist), len(pins)))
+print("json %.1f MB -> gzip %.1f MB -> graph.js %.1f MB  (%.1fs)"
+      % (len(js) / 1e6, len(gz) / 1e6, os.path.getsize(OUT) / 1e6, time.time() - t0))
