@@ -19,8 +19,8 @@
 
 ## แถบเมนู
 
-ทั้งสามหน้ามีแถบเมนูเดียวกันอยู่ใต้การ์ดชื่อหน้า —
-**FOXBORO DATABASE / SIGNAL MAP / FBM MODULE MANAGEMENT** —
+ทุกหน้ามีแถบเมนูเดียวกันอยู่ใต้การ์ดชื่อหน้า —
+**FOXBORO DATABASE / SIGNAL MAP / FBM MODULE MANAGEMENT / MODBUS COMMUNICATION** —
 หน้าที่เปิดอยู่จะเป็นปุ่มสีเขียวมิ้นต์ กดข้ามไปมาได้จากทุกหน้า
 
 ## หน้าจอ
@@ -101,6 +101,35 @@ python build/export_systems.py
 อ่าน `data.js` + `TOP-Foxboro-Hardware-2025_RevA-1.xlsx` แล้วเขียนทับ `systems.js`
 (ต้องมี openpyxl) รันหลัง `export_data.py` ทุกครั้งที่ข้อมูล tag เปลี่ยน
 
+## MODBUS COMMUNICATION
+
+หน้า **`modbus.html`** — ทุก register point ของ gateway serial/ethernet
+(FBM230/231/232/233) รวมไว้ตารางเดียว กรองด้วย CP / gateway / device / ทิศทาง /
+register bank และค้นด้วย tag · register · คำอธิบาย
+
+- **แท็บ Register points** — หนึ่งแถวต่อหนึ่ง register: ทิศทาง (IN = CP อ่านจากอุปกรณ์
+  ผ่าน RIN/IIN/BIN/PAKIN · OUT = CP เขียนไปอุปกรณ์ผ่าน ROUT/IOUT/BOUT/PAKOUT),
+  เลข register, bank ตามมาตรฐาน Modbus (เลขหลักแรก — 0 coil, 1 discrete input,
+  3 input register, 4 holding register), รูปแบบข้อมูล (U2/S2/S4/F4/…), ชนิดบล็อก,
+  tag (คลิกไป SIGNAL MAP), คำอธิบาย, ช่วงค่า engineering
+- **แท็บ สรุปอุปกรณ์** — หนึ่งแถวต่อ ECB201 หนึ่งตัว: protocol, port, station/IP,
+  DVOPTS และจำนวน point ฝั่ง IN / OUT / รวม — ตอบคำถาม "อุปกรณ์ตัวนี้รับ-ส่งอะไรบ้าง"
+- `Export CSV` ดาวน์โหลดเฉพาะที่กรองอยู่ของแท็บที่เปิด
+
+PAKIN/PAKOUT (packed contact group) ไม่มีเลข register ในฐานข้อมูล — ขึ้นเป็น *packed*
+· pseudo-register วินิจฉัยของ gateway (`$M_OVERSCANS` ฯลฯ) ตัดออก
+
+### อัปเดตข้อมูล MODBUS COMMUNICATION
+
+```
+python build/export_modbus.py
+python build/build_modbus_page.py
+```
+
+`export_modbus.py` อ่าน `data.js` เขียนทับ `modbus.js` (208 KB · 16,462 point) ·
+`build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
+(ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
+
 ## ไฟล์
 
 | ไฟล์ | คืออะไร |
@@ -110,13 +139,17 @@ python build/export_systems.py
 | `signal-map.html` | ผังการเดินสัญญาณระหว่างบล็อก (ต้องมี `graph.js`, `params.js`) |
 | `system-monitor.html` | หน้า FBM MODULE MANAGEMENT — อุปกรณ์ / spare point / รายละเอียดของแต่ละ system (ต้องมี `systems.js`) |
 | `systems.js` | ทะเบียนโมดูลและผังช่องสัญญาณ 1,436 โมดูล · 160 KB |
+| `modbus.html` | หน้า MODBUS COMMUNICATION — register IN/OUT ของ gateway serial/ethernet (ต้องมี `modbus.js`) |
+| `modbus.js` | 16,462 register point จาก 86 อุปกรณ์บน 65 gateway · 208 KB |
 | `assets/fonts/` | SF Compact subset (woff2) ต้นฉบับของฟอนต์ที่ฝังไว้ใน `index.html` |
 | `05.jpg` | ต้นฉบับไอคอนบนแถบ filter |
 | `01.png`–`04.jpg` | ภาพอ้างอิงตอนออกแบบ (Power BI เดิม + style guide) |
 | `serve.cmd` | ตัวสำรองไว้เปิดผ่าน localhost |
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
-| `build/add_page_nav.py` | ใส่แถบเมนูสามหน้าให้ทุกหน้า และเปลี่ยนชื่อหน้าที่สาม |
+| `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/build_modbus_page.py` | ประกอบ `modbus.html` จาก `<head>` ของ `system-monitor.html` |
+| `build/add_page_nav.py` | ใส่/ซิงก์แถบเมนูทุกหน้า และเปลี่ยนชื่อหน้าที่สาม |
 | `build/match_page_shell.py` | ขยาย `index.html` ให้เต็มจอเท่าหน้า FBM และใส่แถบ filter แบบพับได้ให้หน้า FBM |
 | `build/embed_fonts.py` | ฝังฟอนต์เป็น data URI ลง `index.html` |
 | `build/refresh_rail_icon.py` | สร้างไอคอนใหม่จาก `05.jpg` |

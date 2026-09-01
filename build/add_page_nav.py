@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Give all three pages one shared nav bar, and rename SYSTEM MONITOR.
+"""Give every page one shared nav bar, and rename SYSTEM MONITOR.
 
 Until now each page carried its own ad-hoc set of cross links in the topbar
 actions -- index had one button, signal-map and system-monitor each had a back
@@ -28,6 +28,7 @@ PAGES = [
     ("index.html",          "FOXBORO DATABASE",       "ตาราง tag ทั้งหมด"),
     ("signal-map.html",     "SIGNAL MAP",             "ผังการเดินสัญญาณ"),
     ("system-monitor.html", "FBM MODULE MANAGEMENT",  "โมดูล &amp; spare point"),
+    ("modbus.html",         "MODBUS COMMUNICATION",   "register IN/OUT ต่ออุปกรณ์"),
 ]
 
 CSS = """
@@ -123,6 +124,28 @@ for path, current in ((IDX, "index.html"), (MAP, "signal-map.html"),
 
     write(path, s)
     print("%s -> nav bar added, %d old link(s) removed" % (name, len(DROP[path])))
+
+# ---- re-sync: every page's nav bar matches PAGES ------------------------
+# add_page_nav only *adds* a bar to a page that lacks one; when PAGES gains an
+# entry the pages that already carry the old bar need their block swapped for
+# the current one. Idempotent -- a page already in sync is left untouched.
+NAV_RE = re.compile(r'  <nav class="pagenav"[^>]*>.*?\n  </nav>', re.S)
+for name, _n, _s in PAGES:
+    path = os.path.join(WEB, name)
+    if not os.path.exists(path):
+        print("%s not built yet -- skip nav re-sync" % name)
+        continue
+    s = read(path)
+    want = nav(name)
+    m = NAV_RE.search(s)
+    if not m:
+        print("%s has no pagenav block to re-sync" % name)
+        continue
+    if m.group(0) == want:
+        continue
+    s = s[:m.start()] + want + s[m.end():]
+    write(path, s)
+    print("%s -> nav bar re-synced (%d items)" % (name, len(PAGES)))
 
 # ---- the rename, visible only --------------------------------------------
 s = read(MON)
