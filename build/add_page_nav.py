@@ -8,7 +8,7 @@ were standing. This puts the same three-item bar under the title card on every
 page, with the current page marked `aria-current="page"`, and strips the links
 back out of the action groups so a page name appears exactly once.
 
-The third page is relabelled **FBM MODULE MANAGEMENT**. Only the visible name
+The third page is relabelled **FBM (I/O) MODULE MANAGEMENT**. Only the visible name
 changes: the file stays `system-monitor.html` so existing links, bookmarks and
 the notes that reference it keep working.
 
@@ -25,10 +25,11 @@ MAP = os.path.join(WEB, "signal-map.html")
 MON = os.path.join(WEB, "system-monitor.html")
 
 PAGES = [
-    ("index.html",          "FOXBORO DATABASE",       "ตาราง tag ทั้งหมด"),
-    ("signal-map.html",     "SIGNAL MAP",             "ผังการเดินสัญญาณ"),
-    ("system-monitor.html", "FBM MODULE MANAGEMENT",  "โมดูล &amp; spare point"),
-    ("modbus.html",         "MODBUS COMMUNICATION",   "register IN/OUT ต่ออุปกรณ์"),
+    ("system-manager.html", "SYSTEM MANAGER",             "ผังอุปกรณ์ &amp; บล็อก"),
+    ("index.html",          "TAG SEARCH",                 "ตาราง tag ทั้งหมด"),
+    ("signal-map.html",     "SIGNAL MAP",                 "ผังการเดินสัญญาณ"),
+    ("system-monitor.html", "FBM (I/O) MODULE MANAGEMENT", "โมดูล &amp; spare point"),
+    ("modbus.html",         "MODBUS COMMUNICATION",       "register IN/OUT ต่ออุปกรณ์"),
 ]
 
 CSS = """
@@ -150,9 +151,9 @@ for name, _n, _s in PAGES:
 # ---- the rename, visible only --------------------------------------------
 s = read(MON)
 for old, new in (("<title>FOXBORO SYSTEM MONITOR</title>",
-                  "<title>FOXBORO FBM MODULE MANAGEMENT</title>"),
+                  "<title>FOXBORO FBM (I/O) MODULE MANAGEMENT</title>"),
                  ("<h1>SYSTEM MONITOR</h1>",
-                  "<h1>FBM MODULE MANAGEMENT</h1>")):
+                  "<h1>FBM (I/O) MODULE MANAGEMENT</h1>")):
     if new in s:
         continue
     assert s.count(old) == 1, "cannot rename: %r not found once" % old

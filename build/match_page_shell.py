@@ -8,7 +8,9 @@ inventing anything new:
      system-monitor.html used `max-width:1900px` with 22/20px. On a 1920px
      screen that is 1760px of content against 1865px -- 105px of dead margin
      on the tag table, measured, not guessed. index.html takes the wider
-     page's numbers.
+     page's numbers. (Later every page dropped the max-width cap entirely
+     for `.app{width:100%}` -- this step now only aligns the body padding
+     and the 16px column gap.)
 
   2. system-monitor.html gets the folding rail index.html already has: the
      icon tile at the top, the chevron on the rail's edge, the 76px folded
@@ -48,7 +50,7 @@ def sub1(s, old, new, what):
 # 1. index.html takes the wider page's frame
 # ==========================================================================
 idx = read(IDX)
-if "max-width:1900px" in idx:
+if "padding:22px 20px 26px" in idx:
     print("index.html already uses the wide frame")
 else:
     idx = sub1(idx,
@@ -58,8 +60,8 @@ else:
     idx = sub1(idx,
                ".app{max-width:1760px; margin:0 auto; display:flex; "
                "flex-direction:column; gap:18px}",
-               ".app{max-width:1900px; margin:0 auto; display:flex; "
-               "flex-direction:column; gap:18px}",
+               ".app{width:100%; margin:0 auto; display:flex; "
+               "flex-direction:column; gap:16px}",
                "index .app width")
     # the rail sticks 26px down because the body padding was 26px; follow it
     idx = sub1(idx,

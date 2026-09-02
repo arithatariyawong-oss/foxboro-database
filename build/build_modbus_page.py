@@ -21,7 +21,7 @@ src = open(SRC, encoding="utf8").read()
 m = re.search(r"<head>.*?</head>", src, re.S)
 assert m, "cannot find <head> in system-monitor.html"
 head = m.group(0)
-head = head.replace("<title>FOXBORO FBM MODULE MANAGEMENT</title>",
+head = head.replace("<title>FOXBORO FBM (I/O) MODULE MANAGEMENT</title>",
                     "<title>FOXBORO MODBUS COMMUNICATION</title>")
 assert "<title>FOXBORO MODBUS COMMUNICATION</title>" in head, "title swap failed"
 
@@ -83,9 +83,10 @@ BODY = r"""
   </header>
 
   <nav class="pagenav" aria-label="หน้าในชุดเครื่องมือ">
-    <a href="index.html"><b>FOXBORO DATABASE</b><i>ตาราง tag ทั้งหมด</i></a>
+    <a href="system-manager.html"><b>SYSTEM MANAGER</b><i>ผังอุปกรณ์ &amp; บล็อก</i></a>
+    <a href="index.html"><b>TAG SEARCH</b><i>ตาราง tag ทั้งหมด</i></a>
     <a href="signal-map.html"><b>SIGNAL MAP</b><i>ผังการเดินสัญญาณ</i></a>
-    <a href="system-monitor.html"><b>FBM MODULE MANAGEMENT</b><i>โมดูล &amp; spare point</i></a>
+    <a href="system-monitor.html"><b>FBM (I/O) MODULE MANAGEMENT</b><i>โมดูล &amp; spare point</i></a>
     <a href="modbus.html" aria-current="page"><b>MODBUS COMMUNICATION</b><i>register IN/OUT ต่ออุปกรณ์</i></a>
   </nav>
 

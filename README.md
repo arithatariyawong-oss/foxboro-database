@@ -20,7 +20,8 @@
 ## แถบเมนู
 
 ทุกหน้ามีแถบเมนูเดียวกันอยู่ใต้การ์ดชื่อหน้า —
-**FOXBORO DATABASE / SIGNAL MAP / FBM MODULE MANAGEMENT / MODBUS COMMUNICATION** —
+**SYSTEM MANAGER / TAG SEARCH / SIGNAL MAP / FBM (I/O) MODULE MANAGEMENT /
+MODBUS COMMUNICATION** —
 หน้าที่เปิดอยู่จะเป็นปุ่มสีเขียวมิ้นต์ กดข้ามไปมาได้จากทุกหน้า
 
 ## หน้าจอ
@@ -42,7 +43,74 @@
 **อื่น ๆ** — คลิกหัวตารางเพื่อเรียงลำดับ · `Export CSV` ดาวน์โหลดเฉพาะแถวและคอลัมน์ที่กรองอยู่ ·
 ปุ่ม ◐ สลับธีมสว่าง/มืด (จำค่าไว้)
 
-## FBM MODULE MANAGEMENT
+## SYSTEM MANAGER
+
+หน้า **`system-manager.html`** — เอาหน้าจอจริงสองตัวมารวมกัน
+**System Auditor** ของ Schneider (`09.png`) คือแปด pane ที่ตอบเรื่องเดียวกัน
+พร้อมกันในหน้าเดียว ไม่มีแท็บ ไม่มี drill-down ที่ทำให้สิ่งที่เพิ่งดูหายไป ·
+และ **System Manager** ของ Foxboro (`08.png`) คือผังอุปกรณ์ฝั่งซ้าย
+`network › station › FBM module › ช่องสัญญาณ` ที่กาง/ยุบได้
+
+**แถบซ้ายคือผังอุปกรณ์** — พับได้ด้วยปุ่มลูกศรที่ขอบแถบ เหมือนช่อง filter
+ของหน้า TAG SEARCH ทุกอย่าง (ยุบเหลือ 76px กดที่ไอคอนเพื่อกางกลับ
+จำสถานะแยกไว้ที่ `fox-mgr-rail-collapsed`) · กดสามเหลี่ยมเพื่อกาง กดที่ชื่อเพื่อเลือก
+เลือก **station** → panes ตอบทั้ง station · เลือก **FBM module** → panes แคบลงเหลือ
+เฉพาะบล็อกที่ลงบนโมดูลนั้น · เลือก **ช่องสัญญาณ** → กระโดดไปที่บล็อกของช่องนั้น
+
+**แปด pane** ใช้ชื่อเดียวกับเครื่องมือจริง
+
+| pane | มีอะไร |
+|---|---|
+| **Foxboro Network** | กล่องอุปกรณ์ห้อยจาก bus กดได้ · `ALL NETWORK` + station ทั้ง 89 ตัว |
+| **Parameter** | station block (`STA`) ของ station ที่เลือก ทีละพารามิเตอร์ |
+| **Compound List** | `CP | COMPOUNDS` |
+| **Compound Properties** | พารามิเตอร์ของ record ตัว compound เอง |
+| **Blocks Types** | `ALL TYPES` + หนึ่งแถวต่อหนึ่งชนิด พร้อมจำนวน (กดเพื่อกรอง) |
+| **Block List** | `CP | COMPOUND | BLOCK | TYPE` |
+| **Block Properties** | ทุกพารามิเตอร์ของบล็อก แยก Inputs / Outputs / Data stores · มีช่องกรอง |
+| **Block Mapping** | ผังหนึ่งชั้น: อะไรต่อเข้าบล็อกนี้บ้าง |
+
+**Block Mapping** อ่านการต่อสองทาง — *ฮาร์ดแวร์* จาก `IOM_ID` ซึ่งชี้ไปที่ ECB
+ชื่อ `<compound>:<IOM_ID>` ใน station เดียวกัน · และ *ซอฟต์แวร์* จากพารามิเตอร์
+ขาเข้าที่มีค่าเป็นพินของบล็อกอื่น
+พินซ้ายคือขาเข้า**ที่ต่อจริง**เท่านั้น (params.js นับพารามิเตอร์ของ AIN เป็น input
+ถึง 56 ตัวเพราะตั้งค่าได้ ไม่ใช่เพราะมีสายลง) พินขวาคือ output ตามนิยามชนิดบล็อก
+
+**กล่องทุกใบในผังเป็นลิงก์ไปหน้า SIGNAL MAP** ของ tag นั้น (`signal-map.html?tag=…`)
+ทำเป็น `<a>` จริงใน SVG ไม่ใช่ตัวดัก click จึงได้พฤติกรรมของเบราว์เซอร์มาครบ —
+เห็น URL ตอน hover, ctrl/คลิกกลางเปิดแท็บใหม่, tab ไปโฟกัสได้
+พอถึงหน้า SIGNAL MAP **ขอบกล่องของ tag นั้นจะกระพริบ** สี่จังหวะแล้วหยุด
+(ถ้าอยากเดินโซ่ต่อ*ในหน้านี้* ใช้ค่า reference ใน Block Properties ที่กดได้เหมือนเดิม)
+
+**ความยาวโซ่** ปรับได้ 1–6 ชั้นด้วย slider บนหัว pane — ชั้นละคอลัมน์ ไล่ย้อนจาก
+บล็อกที่เลือกไปทางต้นทาง บล็อกที่วาดไปแล้วจะไม่ถูกวาดซ้ำ แค่มีสายเพิ่มเข้าไป
+และเส้น **ป้อนกลับ** (cascade ที่วาล์ววนกลับมาเข้า BCALCI ของ PID ตัวเดิม)
+วิ่งสวนทางเส้นอื่น จึงวาดเป็นเส้นประสีเหลืองอ้อมใต้กล่องแทนที่จะลากทะลุ ·
+ตัดที่ 36 บล็อกกันโซ่ระเบิด
+
+แถบบนมี dropdown เลือก station · breadcrumb `TOP › CP › COMPOUND › BLOCK` ·
+ช่องค้นหาที่กระโดดตรงไปยัง tag หรือ station · ค่าที่เป็น reference ของบล็อกอื่น
+(`:05LICA061.OUT`) กดได้ · `Export CSV` ดาวน์โหลด Block List ที่กรองอยู่ ·
+ลิงก์ตรงได้ด้วย `?tag=COMPOUND:BLOCK` หรือ `?cp=11CP01`
+
+> เรื่อง spare point / lifecycle / firmware ของโมดูล ยังอยู่ที่หน้า
+> **FBM (I/O) MODULE MANAGEMENT** — หน้านี้ใช้ผังอุปกรณ์เพื่อ *เลือกขอบเขต*
+> ให้ pane ฝั่งบล็อกเท่านั้น
+
+**ไม่มีค่าออนไลน์ในหน้านี้** ทั้งหมดคือ snapshot จาก SaveAll + ทะเบียนฮาร์ดแวร์
+จึงไม่มี run mode, alarm feed หรือสถานะ scan แบบหน้าจอจริง และไม่มีการเดาค่าพวกนั้นขึ้นมา
+
+### ประกอบหน้า SYSTEM MANAGER ใหม่
+
+```
+python build/build_system_manager_page.py
+```
+
+ยก `<head>` (ฟอนต์ + design token ทั้งชุด) มาจาก `system-monitor.html` ตรง ๆ
+แล้วเขียนทับ `system-manager.html` — รันใหม่ทุกครั้งที่แก้ shell ในหน้า FBM
+ตัวหน้าใช้ `data.js` + `systems.js` + `params.js` ไม่มีไฟล์ข้อมูลของตัวเอง
+
+## FBM (I/O) MODULE MANAGEMENT
 
 หน้า **`system-monitor.html`** ตอบสามคำถามต่อหนึ่ง system —
 *มี module อะไรต่ออยู่บ้าง · เหลือ spare point ตรงไหน · รายละเอียด station เป็นยังไง*
@@ -50,9 +118,9 @@
 
 **89 system · 1,436 module · 16,422 I/O point · ว่าง 6,315 จุด**
 
-**แถบซ้าย** ย่อ/กางได้เหมือนหน้า FOXBORO DATABASE — กดปุ่มลูกศรกลมที่ขอบแถบ
+**แถบซ้าย** ย่อ/กางได้เหมือนหน้า TAG SEARCH — กดปุ่มลูกศรกลมที่ขอบแถบ
 จะยุบเหลือ 76px เหลือแค่ไอคอน กดที่ไอคอนเพื่อกางกลับ ระบบจำสถานะไว้ให้
-(จำแยกจากหน้า FOXBORO DATABASE เพราะสองแถบเก็บคนละเรื่อง)
+(จำแยกจากหน้า TAG SEARCH เพราะสองแถบเก็บคนละเรื่อง)
 ไอคอนตอนกางอยู่จะขยับเบา ๆ คลิกเพื่อหยุดได้
 
 เลือก system ได้ทีละตัว (กดซ้ำเพื่อกลับไปดูทั้งโรงงาน)
@@ -92,7 +160,7 @@ module มากสุด และกรองตาม AREA ได้ · ช�
 `02CP02` กับ `03CP10` มีโมดูลในทะเบียนฮาร์ดแวร์แต่ไม่มีใน SaveAll
 จึงขึ้นเป็น system ที่ระบุว่า *register only*
 
-### อัปเดตข้อมูล FBM MODULE MANAGEMENT
+### อัปเดตข้อมูล FBM (I/O) MODULE MANAGEMENT
 
 ```
 python build/export_systems.py
@@ -137,18 +205,21 @@ python build/build_modbus_page.py
 | `index.html` | ตัวเว็บทั้งหมด — HTML + CSS + JS + ฟอนต์ + ไอคอน อยู่ในไฟล์เดียว |
 | `data.js` | ข้อมูล 77,010 แถว × 1,202 คอลัมน์ · 2.4 MB |
 | `signal-map.html` | ผังการเดินสัญญาณระหว่างบล็อก (ต้องมี `graph.js`, `params.js`) |
-| `system-monitor.html` | หน้า FBM MODULE MANAGEMENT — อุปกรณ์ / spare point / รายละเอียดของแต่ละ system (ต้องมี `systems.js`) |
+| `system-manager.html` | หน้า SYSTEM MANAGER — ผังอุปกรณ์/บล็อกทั้งลำดับชั้น (ต้องมี `data.js`, `systems.js`, `params.js`) |
+| `system-monitor.html` | หน้า FBM (I/O) MODULE MANAGEMENT — อุปกรณ์ / spare point / รายละเอียดของแต่ละ system (ต้องมี `systems.js`) |
 | `systems.js` | ทะเบียนโมดูลและผังช่องสัญญาณ 1,436 โมดูล · 160 KB |
 | `modbus.html` | หน้า MODBUS COMMUNICATION — register IN/OUT ของ gateway serial/ethernet (ต้องมี `modbus.js`) |
 | `modbus.js` | 16,462 register point จาก 86 อุปกรณ์บน 65 gateway · 208 KB |
 | `assets/fonts/` | SF Compact subset (woff2) ต้นฉบับของฟอนต์ที่ฝังไว้ใน `index.html` |
 | `05.jpg` | ต้นฉบับไอคอนบนแถบ filter |
 | `01.png`–`04.jpg` | ภาพอ้างอิงตอนออกแบบ (Power BI เดิม + style guide) |
+| `08.png`–`10.png` | ภาพอ้างอิงหน้า SYSTEM MANAGER (Foxboro System Manager + Schneider System Auditor) |
 | `serve.cmd` | ตัวสำรองไว้เปิดผ่าน localhost |
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
 | `build/build_modbus_page.py` | ประกอบ `modbus.html` จาก `<head>` ของ `system-monitor.html` |
+| `build/build_system_manager_page.py` | ประกอบ `system-manager.html` จาก `<head>` เดียวกัน |
 | `build/add_page_nav.py` | ใส่/ซิงก์แถบเมนูทุกหน้า และเปลี่ยนชื่อหน้าที่สาม |
 | `build/match_page_shell.py` | ขยาย `index.html` ให้เต็มจอเท่าหน้า FBM และใส่แถบ filter แบบพับได้ให้หน้า FBM |
 | `build/embed_fonts.py` | ฝังฟอนต์เป็น data URI ลง `index.html` |
@@ -224,12 +295,35 @@ SF Compact ไม่มีตัวอักษรไทย ข้อควา�
 - เพิ่มหน้า SYSTEM MONITOR และปุ่มเข้าหน้าใหม่ในอีกสองหน้า
   → `build/export_systems.py` + `build/add_system_monitor.py`
 - ย้ายลิงก์ข้ามหน้าออกจาก topbar มารวมเป็นแถบเมนูเดียวใต้ชื่อหน้าทั้งสามหน้า
-  และเปลี่ยนชื่อหน้าที่แสดงจาก SYSTEM MONITOR เป็น FBM MODULE MANAGEMENT
+  และเปลี่ยนชื่อหน้าที่แสดงจาก SYSTEM MONITOR เป็น FBM (I/O) MODULE MANAGEMENT
   (ชื่อไฟล์คงเดิม) → `build/add_page_nav.py`
+- เพิ่มหน้า SYSTEM MANAGER ตามหน้าจอ System Manager / System Auditor ของจริง
+  (`08.png`–`10.png`) — ผังลำดับชั้นสองมุมมอง + status/information + ตารางตามบริบท
+  → `build/build_system_manager_page.py` และเพิ่มเข้าแถบเมนูใน `build/add_page_nav.py`
 - ขยาย `index.html` จาก `max-width:1760px` เป็น `1900px` (padding 22/20/26)
   ให้กว้างเท่าหน้า FBM — บนจอ 1920 เดิมเหลือขอบว่างข้างละ 74.5px
   และยกแถบ filter แบบพับได้ (ไอคอน + ปุ่มลูกศร) ไปใส่หน้า FBM ด้วย
   → `build/match_page_shell.py`
+- เอาเพดานความกว้างออกจากทุกหน้า — `max-width:1900px` คงที่ → `.app{width:100%}`
+  หน้าจึงเต็มความกว้างหน้าต่าง (เหลือแค่ padding ของ body ~20px ข้างละ)
+- ปรับสเกลตัวหนังสือของ `index.html` ให้ตรงกับอีกสี่หน้า — h1 `clamp(26px,3.4vw,40px)`,
+  eyebrow 11px/800, lede 13px, topbar padding `16px 24px`, ระยะห่างคอลัมน์/บล็อก 16px
+  (เดิม `index.html` ถูก bump ให้ใหญ่กว่าตอนยังเป็นหน้าเดียว — `build/bump_type_scale.py`)
+- เขียนหน้า SYSTEM MANAGER ใหม่ตาม layout ของ System Auditor (`09.png`) —
+  จากแถบผังซ้าย + KPI + แท็บ เปลี่ยนเป็นแปด pane เห็นพร้อมกันในหน้าเดียว
+  (Foxboro Network เป็นกล่องกดได้ · Parameter · Compound List/Properties ·
+  Blocks Types · Block List · Block Properties · Block Mapping)
+  → `build/build_system_manager_page.py`
+- คืนผังอุปกรณ์ของ `08.png` มาเป็นแถบซ้ายที่พับได้เหมือนช่อง filter
+  (`network › station › FBM › ช่องสัญญาณ` เลือกโมดูลแล้ว pane ฝั่งบล็อกแคบตาม)
+  และเพิ่ม slider **ความยาวโซ่** 1–6 ชั้นให้ Block Mapping พร้อมเส้นป้อนกลับแบบเส้นประ
+- ทำกล่องใน Block Mapping เป็นลิงก์ `<a>` ไปหน้า SIGNAL MAP ของ tag นั้น
+  และให้ `signal-map.html` กระพริบขอบกล่องของ tag ที่เปิดมาด้วย `?tag=`
+  (ทุกหน้าที่ลิงก์เข้า SIGNAL MAP ได้ผลนี้เหมือนกัน ไม่ใช่แค่ SYSTEM MANAGER)
+- ย่อกล่อง KPI (สรุปจำนวน) และแถบ filter ให้เท่ากันทุกหน้าและเล็กลง —
+  `.kpis` เป็น `minmax(140px,1fr)`/gap 10px, ตัวเลข 34px → 25px, การ์ด padding `11px 14px 10px`;
+  แถบซ้าย `.layout` คอลัมน์ 312/335px → 288px, `.rail` padding `14px`/gap 12px
+  (4 หน้าที่มีสองกล่องนี้ — TAG SEARCH / SYSTEM MANAGER / FBM / MODBUS; SIGNAL MAP ไม่มี)
 
 ทุกสคริปต์ใน `build/` แก้ `index.html` แบบระบุข้อความตรง ๆ และ assert ถ้าหาไม่เจอ
 อ่านเพื่อดูว่าแก้อะไรไป หรือกลับด้านเพื่อย้อนกลับได้

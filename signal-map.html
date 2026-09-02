@@ -65,7 +65,7 @@ body{
   font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
   padding:22px 20px 26px;
 }
-.app{max-width:1900px; margin:0 auto; display:flex; flex-direction:column; gap:16px; height:calc(100vh - 48px)}
+.app{width:100%; margin:0 auto; display:flex; flex-direction:column; gap:16px; height:calc(100vh - 48px)}
 h1{margin:0; font-size:clamp(26px,3.4vw,40px); font-weight:800; letter-spacing:-.03em; line-height:1}
 button,input{font:inherit; color:inherit}
 ::-webkit-scrollbar{width:11px;height:11px}
@@ -174,6 +174,22 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
 .term-lbl{font-size:9px; font-weight:800; letter-spacing:.09em; fill:var(--mint-deep)}
 .blk:hover .blk-face{stroke:var(--wire-hot); stroke-width:1.6}
 
+/* Arriving from a ?tag= link: the block that was clicked pulses its edge a
+   few times. The map can open wide enough that the green root head alone
+   does not catch the eye — the pulse says "this is the one you asked for",
+   then stops. Reduced motion gets the highlight without the blinking. */
+/* the resting edge differs by kind, so the keyframe reads it off a variable
+   rather than hard-coding one and snapping an ECB's edge on the last frame */
+@keyframes blkflash{
+  0%,100%{stroke:var(--flash-base, var(--blk-edge)); stroke-width:1}
+  45%    {stroke:var(--wire-hot); stroke-width:3.4}
+}
+.blk.ecb{--flash-base:var(--ecb-edge)}
+.blk.flash .blk-face{animation:blkflash .62s ease-in-out 4}
+@media (prefers-reduced-motion:reduce){
+  .blk.flash .blk-face{animation:none; stroke:var(--wire-hot); stroke-width:2.6}
+}
+
 .wire{fill:none; stroke:var(--wire); stroke-width:1.4; stroke-linejoin:round}
 .wire.hot{stroke:var(--wire-hot); stroke-width:2.4}
 .wire-hit{fill:none; stroke:transparent; stroke-width:11; cursor:pointer}
@@ -274,7 +290,7 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
 #boot .ring{width:44px; height:44px; border-radius:50%;
   border:4px solid var(--border); border-top-color:var(--mint-deep); animation:spin .85s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#boot p{margin:0; color:var(--text-dim); font-size:15px}
+#boot p{margin:0; color:var(--text-dim); font-size:14px}
 .hide{display:none !important}
 .empty{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   color:var(--text-dim); font-size:15px; text-align:center; padding:30px; pointer-events:none}
@@ -308,9 +324,10 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
   </header>
 
   <nav class="pagenav" aria-label="หน้าในชุดเครื่องมือ">
-    <a href="index.html"><b>FOXBORO DATABASE</b><i>ตาราง tag ทั้งหมด</i></a>
+    <a href="system-manager.html"><b>SYSTEM MANAGER</b><i>ผังอุปกรณ์ &amp; บล็อก</i></a>
+    <a href="index.html"><b>TAG SEARCH</b><i>ตาราง tag ทั้งหมด</i></a>
     <a href="signal-map.html" aria-current="page"><b>SIGNAL MAP</b><i>ผังการเดินสัญญาณ</i></a>
-    <a href="system-monitor.html"><b>FBM MODULE MANAGEMENT</b><i>โมดูล &amp; spare point</i></a>
+    <a href="system-monitor.html"><b>FBM (I/O) MODULE MANAGEMENT</b><i>โมดูล &amp; spare point</i></a>
     <a href="modbus.html"><b>MODBUS COMMUNICATION</b><i>register IN/OUT ต่ออุปกรณ์</i></a>
   </nav>
 
@@ -657,6 +674,19 @@ function show(n, push){
   $('#q').value = NAME(n);
   $('#results').innerHTML = '';
 }
+/* Pulse the root's edge. Only the ?tag= arrival calls this: re-rooting by
+   hand needs no announcement, you just clicked the thing. */
+let flashT = null;
+function flashRoot(){
+  const el = world.querySelector('.blk.root');
+  if (!el) return;
+  clearTimeout(flashT);
+  el.classList.remove('flash');
+  void el.getBoundingClientRect();            // reflow, so a repeat restarts it
+  el.classList.add('flash');
+  flashT = setTimeout(() => el.classList.remove('flash'), 2700);
+}
+
 $('#back').addEventListener('click', () => { const p = history.pop(); if (p !== undefined) show(p, false); });
 $('#depth').addEventListener('input', () => {
   $('#depthN').textContent = $('#depth').value;
@@ -926,7 +956,7 @@ addEventListener('resize', () => { if (laid) fit(); });
         const cands = buildShort().get(want);
         if (cands && cands.length) n = cands[0];
       }
-      if (n !== undefined){ show(n, false); return; }
+      if (n !== undefined){ show(n, false); flashRoot(); return; }
       $('#q').value = want;
       $('#empty').classList.remove('hide');
       $('#empty').innerHTML =
