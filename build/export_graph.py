@@ -76,10 +76,27 @@ for i, n in enumerate(name):
     by_full.setdefault(n, i)
     by_short[n.split(":")[-1]].append(i)
 
-REF = re.compile(r"^([A-Za-z0-9_]{0,32}):?([A-Za-z0-9_]{1,32})\.([A-Za-z0-9_]{1,16})$")
+# A reference may carry a third dot-separated token, and dropping those was
+# silently costing the diagram a QUARTER of the plant's wiring -- 14,639 of
+# 60,137 reference-shaped values. Two families use it, and in both the block
+# and the parameter are still the first two tokens; the tail only qualifies
+# the connection:
+#
+#   V3973:39LISA223.ALMSTA.B15   bit 15 of a packed status word. PAKCIN is
+#                                11,897 of these on its own (a PAKIN block
+#                                exists to fan one word out bit by bit),
+#                                then ALMSTA, LO01, BLKSTA, ECBSTA, DEVSTS.
+#   C305_1:03FI046.MA.1          the boolean form, where the source and the
+#                                destination parameter are always the same
+#                                one (MA -> MA, IN_13 -> IN_13).
+#
+# ICC's own Input References pane prints the whole string (see 11.png), so
+# the tail is kept as a fifth field on the edge and the map prints it too.
+REF = re.compile(r"^([A-Za-z0-9_]{0,32}):?([A-Za-z0-9_]{1,32})"
+                 r"\.([A-Za-z0-9_]{1,16})(?:\.([A-Za-z0-9_]{1,6}))?$")
 SKIP_COLS = {"Source.Name", "VERNUM"}
 
-edges = []          # (src_row, src_param, dst_row, dst_param)
+edges = []          # (src_row, src_param, dst_row, dst_param, qualifier)
 seen = set()
 for ci, sp in enumerate(C):
     if not isinstance(sp, dict) or H[ci] in SKIP_COLS:
@@ -106,7 +123,7 @@ for ci, sp in enumerate(C):
         g = ok.get(code)
         if not g:
             continue
-        comp, blk, par = g
+        comp, blk, par, qual = g
         src = by_full.get("%s:%s" % (comp, blk)) if comp else None
         if src is None:
             cands = by_short.get(blk)
@@ -117,13 +134,15 @@ for ci, sp in enumerate(C):
         # A block referencing its own parameter is a real wire, not noise:
         # H101:01PIC130 has RSP = H101:01PIC130.SPT, and the ICC detail draws
         # exactly that loop from the block's own SPT back into its RSP.
-        key = (src, par, row, col)
+        key = (src, par, row, col, qual or "")
         if key in seen:
             continue
         seen.add(key)
         edges.append(key)
 
-print("parameter edges: %d  (%.1fs)" % (len(edges), time.time() - t0))
+n_qual = sum(1 for e in edges if e[4])
+print("parameter edges: %d  (%d carry a bit/boolean qualifier)  (%.1fs)"
+      % (len(edges), n_qual, time.time() - t0))
 
 # ---- the field ends: ECB <-> the I/O blocks bound to it -----------------
 # An AIN does not *reference* its FBM through a parameter — it names it by
@@ -166,7 +185,7 @@ for i in range(N):
         if e is None:
             n_missed += 1
             continue
-        edges.append((i, pin_blk, e, pin_ecb) if is_out else (e, pin_ecb, i, pin_blk))
+        edges.append((i, pin_blk, e, pin_ecb, "") if is_out else (e, pin_ecb, i, pin_blk, ""))
         n_hw += 1
 
 print("hardware edges: %d  (%d I/O bindings had no ECB in the export)" % (n_hw, n_missed))
@@ -174,7 +193,7 @@ print("edges total: %d  (%.1fs)" % (len(edges), time.time() - t0))
 
 # ---- keep only the blocks the diagram can reach -------------------------
 used = set()
-for s, _, t, _ in edges:
+for s, _, t, _, _ in edges:
     used.add(s)
     used.add(t)
 for i in range(N):                      # field I/O is an endpoint worth having
@@ -193,7 +212,10 @@ nodes = [[
     pnD[pnA[r]] if pnA[r] >= 0 else "",         # 6 point number
     r,                                          # 7 row in data.js — the key
 ] for r in rows]                                #   Properties reads values by
-elist = [[remap[s], sp, remap[t], tp] for s, sp, t, tp in edges]
+# the qualifier is a 5th element only where there is one -- 24% of the edges
+# carry one, and padding the other 76% with "" would cost graph.js for nothing
+elist = [[remap[s], sp, remap[t], tp] + ([q] if q else [])
+         for s, sp, t, tp, q in edges]
 
 # ---- the pin reference, trimmed to what the diagram needs ---------------
 pins = {}
