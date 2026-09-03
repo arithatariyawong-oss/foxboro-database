@@ -363,6 +363,17 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
   padding:3px 9px; border-radius:999px; border:1px solid var(--border);
   background:var(--btn); color:var(--text-dim)}
 .badge.ok{background:var(--mint); border-color:var(--mint-deep); color:#17352b}
+
+/* no topbar, no page-nav row -- just the diagram and the step listing. A
+   popup iframe has no room for a page's own chrome (see add_logic_popup.py
+   on signal-map.html), and the standalone page does not want it either: it
+   is reached by a deep link's `?tag=`, same as before. Last in the sheet
+   on purpose -- .topbar and .pagenav are defined further up with their own
+   `display:flex`, which would otherwise win the cascade over an earlier
+   `display:none`. */
+body{padding:10px}
+.topbar, .pagenav{display:none}
+.app{height:calc(100vh - 20px)}
 </style>
 </head>
 <body>
@@ -716,30 +727,99 @@ const boxH = (it, nodes) =>
 
 function render(L){
   const { nodes, outs, box } = L;
-  const parts = [], wires = [];
+  const parts = [];
   const anchorOut = k => { const b = box.get(k); return [b.x + b.w, b.y + b.h / 2]; };
-
-  /* wires first so the boxes sit on top */
-  let wi = 0;
   const legY = (b, i, n) => b.y + b.h * (i + 1) / (n + 1);
+
+  /* ---- wires first, so boxes sit on top ----
+     A column-adjacent wire (target column === source column + 1) crosses
+     only the empty gap between the two, so it is drawn straight across.
+     Everything else -- a shallow input reaching a gate several columns
+     deeper -- is routed above the whole sheet instead, one row per wire
+     (no two ever share a row, so no two of these can coincide), the one
+     stretch of the sheet no gate ever occupies regardless of how many
+     columns it skips. This is a DAG (a stack program cannot feed back
+     into an earlier step), so unlike signal-map.html there is no
+     feedback case to handle.
+
+     Both kinds still land on the target box through the same narrow gap
+     in front of it, so they share ONE entry-lane counter per target x --
+     an adjacent wire and a skip wire converging on the same box no
+     longer get handed the same x by two counters that do not know about
+     each other. Every lane budget is a fixed share of the gap
+     (`COLGAP - 34`, split by how many wires actually use it) rather than
+     a fixed step per wire, so a crowded column can never reserve more
+     width than the gap actually has. */
+  const raw = [];
+  let wi = 0;
   for (const id of L.used){
-    const n = nodes[id], b = box.get('n' + id);
+    const n = nodes[id], tk = 'n' + id, b = box.get(tk);
     n.ins.forEach((src, i) => {
-      const [sx, sy] = anchorOut('n' + src);
-      const dy = legY(b, i, n.ins.length), dx = b.x;
-      wires.push({ i: wi++, sx, sy, dx, dy });
+      const sk = 'n' + src, sb = box.get(sk);
+      const [sx, sy] = anchorOut(sk);
+      raw.push({ i: wi++, sx, sy, dx: b.x, dy: legY(b, i, n.ins.length), sd: sb.d, td: b.d });
     });
   }
   outs.forEach((o, k) => {
     if (o.src == null) return;
-    const [sx, sy] = anchorOut('n' + o.src);
-    const b = box.get('o' + k);
-    wires.push({ i: wi++, sx, sy, dx: b.x, dy: b.y + b.h / 2 });
+    const sk = 'n' + o.src, sb = box.get(sk), tk = 'o' + k, b = box.get(tk);
+    const [sx, sy] = anchorOut(sk);
+    raw.push({ i: wi++, sx, sy, dx: b.x, dy: b.y + b.h / 2, sd: sb.d, td: b.d });
   });
+
+  const through = new Set(), byTargetCol = new Map();
+  for (const w of raw){
+    if (w.td !== w.sd + 1) through.add(w.i);
+    if (!byTargetCol.has(w.td)) byTargetCol.set(w.td, []);
+    byTargetCol.get(w.td).push(w.i);
+  }
+
+  /* a column can mix a wide IO box with a narrower gate box, centred
+     inside the same reserved width -- so a box's OWN x is not always a
+     safe lane anchor, another box already sitting further out in the
+     same column can be in the way. Anchor every lane to the column's
+     shared edges instead: the widest box in a column has no centring
+     offset, so the minimum x at a given depth is that column's true
+     left edge, and x+w's maximum is its true right edge. */
+  const colLeft = new Map(), colRight = new Map();
+  for (const b of box.values()){
+    colLeft.set(b.d, Math.min(colLeft.has(b.d) ? colLeft.get(b.d) : Infinity, b.x));
+    colRight.set(b.d, Math.max(colRight.has(b.d) ? colRight.get(b.d) : -Infinity, b.x + b.w));
+  }
+
+  const BUDGET = COLGAP - 34;
+  const globalTop = Math.min(...[...box.values()].map(b => b.y));
+  const bandOf = new Map();
+  for (const i of through) bandOf.set(i, bandOf.size);
+  const exitCount = new Map();
+  for (const i of through) exitCount.set(raw[i].sd, (exitCount.get(raw[i].sd) || 0) + 1);
+  const exitRank = new Map();
+  const rankOf = (m, key) => { const r = m.get(key) || 0; m.set(key, r + 1); return r; };
+
+  const wires = [];
+  for (const [td, list] of byTargetCol){
+    /* rank by the row each wire actually runs at, so lanes fan out in
+       travel order instead of crossing right at the gap's mouth */
+    list.sort((ia, ib) => (raw[ia].sy + raw[ia].dy) - (raw[ib].sy + raw[ib].dy));
+    const lane = Math.min(10, BUDGET / list.length);
+    list.forEach((i, rank) => {
+      const w = raw[i];
+      const enterX = colLeft.get(td) - 14 - rank * lane;
+      let d;
+      if (!through.has(i)){
+        d = `M${w.sx} ${w.sy} H${enterX} V${w.dy} H${w.dx}`;
+      } else {
+        const ry = globalTop - 18 - bandOf.get(i) * 10;          // its own row, never reused
+        const exLane = Math.min(5, BUDGET / exitCount.get(w.sd));
+        const ex = colRight.get(w.sd) + 10 + rankOf(exitRank, w.sd) * exLane;
+        d = `M${w.sx} ${w.sy} H${ex} V${ry} H${enterX} V${w.dy} H${w.dx}`;
+      }
+      wires.push({ i, d, dx: w.dx, dy: w.dy });
+    });
+  }
+  wires.sort((a, b) => a.i - b.i);
   for (const w of wires){
-    const mx = w.dx - 26;
-    const d = `M${w.sx} ${w.sy} H${Math.max(mx, w.sx + 10)} V${w.dy} H${w.dx}`;
-    parts.push(`<path class="lg-wire" d="${d}"></path>`);
+    parts.push(`<path class="lg-wire" d="${w.d}"></path>`);
     parts.push(`<path class="lg-arrow" d="M${w.dx} ${w.dy} l-7 -3.6 v7.2 z"></path>`);
   }
 

@@ -283,6 +283,25 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
   text-decoration-style:dotted; text-underline-offset:3px}
 .props-note{padding:16px; font-size:13px; color:var(--text-dim); text-align:center}
 
+/* ---- logic view popup ---- */
+.logic-backdrop{
+  position:fixed; inset:0; z-index:150; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.5); padding:26px;
+}
+.logic-modal{
+  width:min(1400px,96vw); height:min(880px,92vh); display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-md); box-shadow:var(--lift), var(--inset-hi); overflow:hidden;
+}
+.logic-modal-head{
+  display:flex; align-items:center; gap:12px; padding:13px 18px;
+  border-bottom:1px solid var(--border-soft); flex:none;
+}
+.logic-modal-head b{font-size:15px; font-weight:800}
+.logic-modal-head span{font-size:12px; color:var(--text-dim)}
+.logic-modal-head .props-close{margin-left:auto}
+.logic-modal iframe{flex:1; border:0; width:100%}
+
 .tip{
   position:fixed; z-index:80; pointer-events:none; opacity:0;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
@@ -336,7 +355,6 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
     <a href="system-manager.html"><b>SYSTEM MANAGER</b><i>ผังอุปกรณ์ &amp; บล็อก</i></a>
     <a href="index.html"><b>TAG SEARCH</b><i>ตาราง tag ทั้งหมด</i></a>
     <a href="signal-map.html" aria-current="page"><b>SIGNAL MAP</b><i>ผังการเดินสัญญาณ</i></a>
-    <a href="logic-view.html"><b>LOGIC VIEW</b><i>ผังลอจิกจาก step</i></a>
     <a href="system-monitor.html"><b>FBM (I/O) MODULE MANAGEMENT</b><i>โมดูล &amp; spare point</i></a>
     <a href="modbus.html"><b>MODBUS COMMUNICATION</b><i>register IN/OUT ต่ออุปกรณ์</i></a>
   </nav>
@@ -581,34 +599,97 @@ function pinY(n, side, param, L){
 function render(L){
   const parts = [];
 
-  /* ---- wires first, so blocks sit on top ---- */
-  const gapLane = new Map();          // vertical lanes between columns
-  let ringUp = 0;                     // horizontal lanes for feedback paths
-  const wires = [];
+  /* ---- wires first, so blocks sit on top ----
+     Two kinds of overlap are possible here: a wire cutting through a
+     block that is none of its business, and two different wires ending
+     up on the exact same track.
+
+     A column-adjacent edge only ever crosses the empty gap between two
+     columns, so it can never hit a block -- that gap holds nothing.
+     Anything else (a skip over a column, or a feedback edge running
+     backwards) is routed up over the whole diagram instead, each on its
+     own row, the other stretch of canvas no block ever stands in, no
+     matter how many columns the edge skips.
+
+     Both kinds still land on the target block through the same narrow
+     gap in front of it, so their final approach shares ONE lane
+     assignment per target column -- an adjacent edge and a skip edge
+     converging on the same column no longer get handed the same x by
+     two counters that do not know about each other. */
+  const selfLoops = [], through = new Set(), byTargetCol = new Map();
   L.edges.forEach((e, i) => {
-    const [s, sp, t, tp, qual] = e;
+    const [s, , t] = e;
+    if (s === t){ selfLoops.push(i); return; }
+    const bs = L.box.get(s), bt = L.box.get(t);
+    if (bt.col !== bs.col + 1) through.add(i);
+    if (!byTargetCol.has(bt.col)) byTargetCol.set(bt.col, []);
+    byTargetCol.get(bt.col).push(i);
+  });
+
+  const wires = [];
+  const loopRank = new Map();
+  for (const i of selfLoops){
+    /* a block wired to its own parameter (PIDE RSP <- its own SPT, and
+       often OUT -> FBK on the same block too): a tight loop over the top
+       of the box, the way ICC draws it. A second loop on the same block
+       is stepped out a bit further on both legs and a bit higher, so it
+       clears the first loop instead of retracing it exactly. */
+    const [s, sp, t, tp, qual] = L.edges[i];
     const bs = L.box.get(s), bt = L.box.get(t);
     const sx = bs.x + bs.w, sy = pinY(s, 'out', sp, L);
     const dx = bt.x, dy = pinY(t, 'in', tp, L);
-    let d;
-    if (s === t){
-      /* a block wired to its own parameter (PIDE RSP <- its own SPT):
-         a tight loop over the top of the box, the way ICC draws it */
-      const top = bs.y - 12;
-      d = `M${sx} ${sy} H${sx + 16} V${top} H${dx - 16} V${dy} H${dx}`;
-    } else if (bt.col > bs.col){
-      const key = bt.col;
-      const lane = (gapLane.get(key) || 0) + 1; gapLane.set(key, lane);
-      const mx = bt.x - 24 - (lane % 9) * LANE;
-      d = `M${sx} ${sy} H${mx} V${dy} H${dx}`;
-    } else {
-      /* feedback: out to the right, up over everything, back to the left */
-      ringUp += 1;
-      const ry = -30 - (ringUp % 10) * LANE;
-      d = `M${sx} ${sy} H${sx + 22} V${ry} H${dx - 26 - (ringUp % 7) * LANE} V${dy} H${dx}`;
-    }
+    const rank = loopRank.get(s) || 0; loopRank.set(s, rank + 1);
+    const leg = 16 + rank * 6, top = bs.y - 12 - rank * 6;
+    const d = `M${sx} ${sy} H${sx + leg} V${top} H${dx - leg} V${dy} H${dx}`;
     wires.push({ i, d, s, t, sp, tp, dx, dy, qual });
-  });
+  }
+
+  const globalTop = Math.min(...[...L.box.values()].map(b => b.y));
+  const bandOf = new Map();
+  for (const i of through) bandOf.set(i, bandOf.size);
+  /* how many `through` edges leave each source column, known before any
+     of them are placed, so the per-wire step can never be wider than the
+     column's own share of the gap -- a fixed budget split N ways instead
+     of a fixed step multiplied by N, which is what let a crowded column
+     overrun into the block on the other side of its own gap */
+  const exitCount = new Map();
+  for (const i of through){
+    const col = L.box.get(L.edges[i][0]).col;
+    exitCount.set(col, (exitCount.get(col) || 0) + 1);
+  }
+  const exitRank = new Map();
+  const rankOf = (m, key) => { const r = m.get(key) || 0; m.set(key, r + 1); return r; };
+
+  for (const [, list] of byTargetCol){
+    /* rank by the row each wire actually runs at, so the lanes fan out
+       in travel order instead of crossing right at the gap's mouth */
+    list.sort((ia, ib) => {
+      const a = L.edges[ia], b = L.edges[ib];
+      return (pinY(a[0], 'out', a[1], L) + pinY(a[2], 'in', a[3], L))
+           - (pinY(b[0], 'out', b[1], L) + pinY(b[2], 'in', b[3], L));
+    });
+    /* a fixed (COL_GAP - 60) budget shared evenly, not a fixed step per
+       wire -- so list.length wires can never reserve more than the gap
+       actually has, however many of them there are */
+    const lane = Math.min(LANE, (COL_GAP - 60) / list.length);
+    list.forEach((i, rank) => {
+      const [s, sp, t, tp, qual] = L.edges[i];
+      const bs = L.box.get(s), bt = L.box.get(t);
+      const sx = bs.x + bs.w, sy = pinY(s, 'out', sp, L);
+      const dx = bt.x, dy = pinY(t, 'in', tp, L);
+      const enterX = dx - 24 - rank * lane;
+      let d;
+      if (!through.has(i)){
+        d = `M${sx} ${sy} H${enterX} V${dy} H${dx}`;
+      } else {
+        const ry = globalTop - 30 - bandOf.get(i) * LANE;      // its own row, never reused
+        const exLane = Math.min(6, (COL_GAP - 60) / exitCount.get(bs.col));
+        const ex = sx + 18 + rankOf(exitRank, bs.col) * exLane;
+        d = `M${sx} ${sy} H${ex} V${ry} H${enterX} V${dy} H${dx}`;
+      }
+      wires.push({ i, d, s, t, sp, tp, dx, dy, qual });
+    });
+  }
   for (const w of wires){
     parts.push(`<path class="wire" id="w${w.i}" d="${w.d}"></path>`);
     parts.push(`<path class="wire-hit" data-w="${w.i}" d="${w.d}"></path>`);
@@ -779,10 +860,31 @@ $('#pinsBtn').addEventListener('click', () => {
    re-mapping straight away, so reading a block's parameters does not cost
    you the diagram you were looking at.
    ======================================================================= */
+let LOGIC_NAMES = null, logicPromise = null;
+function loadLogicNames(){
+  /* Kicked off once at boot, not on first click -- see file header. */
+  if (LOGIC_NAMES) return Promise.resolve(LOGIC_NAMES);
+  if (!logicPromise) logicPromise = new Promise((res, rej) => {
+    if (window.FOX_LOGIC_B64) return res();
+    const s = document.createElement('script');
+    s.src = 'logic.js';
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('เปิด logic.js ไม่ได้'));
+    document.head.appendChild(s);
+  }).then(async () => {
+    const g = await inflate(window.FOX_LOGIC_B64);
+    LOGIC_NAMES = new Set(g.blocks.map(b => b[0]));
+    return LOGIC_NAMES;
+  }).catch(err => { console.error(err); return null; });
+  return logicPromise;
+}
+
 let menuEl = null;
 function closeMenu(){ if (menuEl){ menuEl.remove(); menuEl = null; } }
 addEventListener('pointerdown', e => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
-addEventListener('keydown', e => { if (e.key === 'Escape'){ closeMenu(); closeProps(); } });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ closeMenu(); closeProps(); closeLogicPopup(); }
+});
 addEventListener('blur', closeMenu);
 
 function openMenu(n, cx, cy){
@@ -795,6 +897,8 @@ function openMenu(n, cx, cy){
       `<span>${esc(TYPE(n))}${DESC(n) ? ' · ' + esc(clip(DESC(n), 30)) : ''}</span></div>` +
     `<button data-a="root"${n === root ? ' disabled' : ''}>ตั้งเป็น tag หลัก<i>re-map</i></button>` +
     `<button data-a="props">Properties…<i>ค่าภายใน</i></button>` +
+    (LOGIC_NAMES && LOGIC_NAMES.has(NAME(n))
+      ? `<button data-a="logic">Logic View…<i>step program</i></button>` : '') +
     `<button data-a="copy">คัดลอกชื่อ tag</button>`;
   document.body.appendChild(el);
   /* keep it on screen: flip to the other side of the cursor when it would
@@ -807,13 +911,44 @@ function openMenu(n, cx, cy){
     closeMenu();
     if (a.dataset.a === 'root') show(n, true);
     else if (a.dataset.a === 'props') openProps(n);
+    else if (a.dataset.a === 'logic') openLogicPopup(n);
     else if (a.dataset.a === 'copy') navigator.clipboard?.writeText(NAME(n));
   });
   menuEl = el;
 }
 
 /* =======================================================================
-   5c. PROPERTIES
+   5c. LOGIC VIEW POPUP — offered from the menu only on a block logic.js
+   actually carries a step program for (CALC / CALCA / LOGIC / MATH with
+   STEP01..STEP50 written); logic-view.html itself still explains why
+   nothing else has one, this just keeps the option off blocks that never
+   could. An iframe in a modal, not a navigation — picking Logic View does
+   not cost you the map you had open, the same reason Properties is a
+   panel and not its own page.
+   ======================================================================= */
+let logicEl = null;
+function closeLogicPopup(){ if (logicEl){ logicEl.remove(); logicEl = null; } }
+function openLogicPopup(n){
+  closeLogicPopup();
+  const el = document.createElement('div');
+  el.className = 'logic-backdrop';
+  el.innerHTML =
+    `<div class="logic-modal">` +
+      `<div class="logic-modal-head"><b>${esc(NAME(n))}</b>` +
+        `<span>${esc(TYPE(n))}${DESC(n) ? ' · ' + esc(DESC(n)) : ''}</span>` +
+        `<button class="props-close" title="ปิด">✕</button></div>` +
+      `<iframe src="logic-view.html?tag=${encodeURIComponent(NAME(n))}&embed=1"></iframe>` +
+    `</div>`;
+  document.body.appendChild(el);
+  logicEl = el;
+  /* click the dim backdrop (not the modal itself) to dismiss */
+  el.addEventListener('pointerdown', ev => { if (ev.target === el) closeLogicPopup(); });
+  el.querySelector('.props-close').addEventListener('click', closeLogicPopup);
+}
+loadLogicNames();
+
+/* =======================================================================
+   5d. PROPERTIES
    The diagram carries only what it draws. The full parameter set lives in
    data.js, so that file is fetched the first time someone asks for it and
    the block's row read straight out of the sparse columns — 1,202 columns
