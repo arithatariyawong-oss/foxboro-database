@@ -394,7 +394,7 @@ td .dim{color:var(--text-dim); font-size:12.5px}
         <b>Systems <span id="nSys" style="color:var(--text-faint);font-weight:700"></span></b>
         <button class="mini" id="allBtn">ทั้งโรงงาน</button>
       </div>
-      <label class="search"><input id="qSys" placeholder="ค้นหา system / letterbug…" autocomplete="off"><i class="mag">⌕</i></label>
+      <label class="search"><input id="qSys" placeholder="ค้นหา system / letterbug… ใช้ * ได้" autocomplete="off"><i class="mag">⌕</i></label>
 
       <div>
         <h3>เรียงตาม</h3>
@@ -437,6 +437,30 @@ td .dim{color:var(--text-dim); font-size:12.5px}
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
+
+/* ---- wildcard search --------------------------------------------------
+   A query stays a plain case-insensitive substring, exactly as it always
+   was, UNLESS it carries a wildcard: `*` is any run of characters and `?`
+   is exactly one. The pattern is left UNANCHORED either way, so `05F*065`
+   finds V501:05FRC065 without having to spell the compound out — anchoring
+   would make the obvious `05FRC*` match nothing, because every name here
+   begins with its compound.
+   Returns null for an empty query (meaning "no filter"), else a predicate.
+   The RegExp is compiled once per query and never per row: 77,010 rows
+   would otherwise pay for the compile on every keystroke, which is the
+   trap Intl.Collator set on this page before. */
+function foxMatch(q){
+  const s = (q == null ? '' : String(q)).trim();
+  if (!s) return null;
+  const str = v => String(v == null ? '' : v);
+  if (s.indexOf('*') === -1 && s.indexOf('?') === -1){
+    const needle = s.toUpperCase();
+    return v => str(v).toUpperCase().indexOf(needle) !== -1;
+  }
+  const re = new RegExp(s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                         .replace(/\*/g, '.*').replace(/\?/g, '.'), 'i');
+  return v => re.test(str(v));
+}
 
 /* =======================================================================
    1. DATA
@@ -520,12 +544,11 @@ function sysStats(){
 }
 
 function railList(){
-  const q = qSys.trim().toLowerCase();
+  const hit = foxMatch(qSys);
   let list = SYS.map((s,i) => ({s,i})).filter(({s}) => {
     if (areaSel && s.area !== areaSel) return false;
-    if (!q) return true;
-    return s.n.toLowerCase().includes(q) || (s.sta||"").toLowerCase().includes(q)
-        || s._lb.toLowerCase().includes(q);
+    if (!hit) return true;
+    return hit(s.n) || hit(s.sta || "") || hit(s._lb);
   });
   const key = {
     name : a => 0,

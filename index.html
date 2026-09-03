@@ -445,12 +445,12 @@ a.td.lnk:focus-visible{outline:2px solid var(--mint-ring); outline-offset:-2px}
 
       <section class="fgroup">
         <h3>Name</h3>
-        <label class="search"><input id="qName" placeholder="ค้นหา NAME…" autocomplete="off"><i class="mag">⌕</i></label>
+        <label class="search"><input id="qName" placeholder="ค้นหา NAME… ใช้ * ได้" autocomplete="off"><i class="mag">⌕</i></label>
       </section>
 
       <section class="fgroup">
         <h3>Descrp</h3>
-        <label class="search"><input id="qDesc" placeholder="ค้นหา DESCRP…" autocomplete="off"><i class="mag">⌕</i></label>
+        <label class="search"><input id="qDesc" placeholder="ค้นหา DESCRP… ใช้ * ได้" autocomplete="off"><i class="mag">⌕</i></label>
       </section>
 
       <section class="fgroup">
@@ -510,6 +510,30 @@ a.td.lnk:focus-visible{outline:2px solid var(--mint-ring); outline-offset:-2px}
    1. DECODE  —  base64 -> gzip -> JSON  (works straight off file://)
    ======================================================================= */
 const $ = s => document.querySelector(s);
+
+/* ---- wildcard search --------------------------------------------------
+   A query stays a plain case-insensitive substring, exactly as it always
+   was, UNLESS it carries a wildcard: `*` is any run of characters and `?`
+   is exactly one. The pattern is left UNANCHORED either way, so `05F*065`
+   finds V501:05FRC065 without having to spell the compound out — anchoring
+   would make the obvious `05FRC*` match nothing, because every name here
+   begins with its compound.
+   Returns null for an empty query (meaning "no filter"), else a predicate.
+   The RegExp is compiled once per query and never per row: 77,010 rows
+   would otherwise pay for the compile on every keystroke, which is the
+   trap Intl.Collator set on this page before. */
+function foxMatch(q){
+  const s = (q == null ? '' : String(q)).trim();
+  if (!s) return null;
+  const str = v => String(v == null ? '' : v);
+  if (s.indexOf('*') === -1 && s.indexOf('?') === -1){
+    const needle = s.toUpperCase();
+    return v => str(v).toUpperCase().indexOf(needle) !== -1;
+  }
+  const re = new RegExp(s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                         .replace(/\*/g, '.*').replace(/\?/g, '.'), 'i');
+  return v => re.test(str(v));
+}
 const fmt = n => n.toLocaleString('en-US');
 
 async function decodePayload(b64){
@@ -595,9 +619,12 @@ function setMask(ci, chosen){
   return m;
 }
 function textMask(ci, q){
-  if (!q) return null;
-  const d = dictOf(ci), m = new Uint8Array(d.length + 1), needle = q.toLowerCase();
-  for (let k = 0; k < d.length; k++) if (d[k].toLowerCase().indexOf(needle) !== -1) m[k + 1] = 1;
+  /* over the column's DICTIONARY, not its 77,010 rows -- 33,387 distinct
+     DESCRP values is what a wildcard actually has to be tested against */
+  const hit = foxMatch(q);
+  if (!hit) return null;
+  const d = dictOf(ci), m = new Uint8Array(d.length + 1);
+  for (let k = 0; k < d.length; k++) if (hit(d[k])) m[k + 1] = 1;
   return m;                                     // blank never matches a query
 }
 
@@ -667,8 +694,8 @@ function buildChips(key, host, ci, filterInput){
 }
 function paintChips(key){
   const src = CHIP_SRC[key], chosen = state.sets[key];
-  const q = src.filterInput ? src.filterInput.value.trim().toLowerCase() : '';
-  const items = q ? src.items.filter(it => it.label.toLowerCase().indexOf(q) !== -1) : src.items;
+  const hit = foxMatch(src.filterInput ? src.filterInput.value : '');
+  const items = hit ? src.items.filter(it => hit(it.label)) : src.items;
   src.host.innerHTML = items.map(it =>
     `<button class="chip${chosen.has(it.code) ? ' is-on' : ''}" data-code="${it.code}">` +
     `${esc(it.label)}<span class="c">${fmt(it.n)}</span></button>`).join('');
@@ -728,8 +755,8 @@ function buildColPicker(){
   paintColList();
 }
 function paintColList(){
-  const q = $('#qCol').value.trim().toLowerCase();
-  const list = (q ? colCandidates.filter(c => c.h.toLowerCase().indexOf(q) !== -1) : colCandidates).slice(0, 400);
+  const hit = foxMatch($('#qCol').value);
+  const list = (hit ? colCandidates.filter(c => hit(c.h)) : colCandidates).slice(0, 400);
   const on = new Set(state.cols);
   $('#colList').innerHTML = list.map(c =>
     `<label class="colrow"><input type="checkbox" value="${c.i}"${on.has(c.i) ? ' checked' : ''}>` +
@@ -1006,12 +1033,12 @@ async function openProps(row){
 
 function paintProps(ty){
   if (!propsEl) return;
-  const q = propsEl.querySelector('#pq').value.trim().toUpperCase();
+  const hit = foxMatch(propsEl.querySelector('#pq').value);
   const ref = (PARAMS && PARAMS[ty]) || {}, sect = ref.s || {}, desc = ref.d || {};
   const groups = { I: [], O: [], D: [], X: [] };
   for (const [k, v] of propsRows){
     if (k === 'Source.Name') continue;
-    if (q && k.toUpperCase().indexOf(q) === -1 && v.toUpperCase().indexOf(q) === -1) continue;
+    if (hit && !hit(k) && !hit(v)) continue;
     (groups[sect[k]] || groups.X).push([k, v]);
   }
   let html = '';

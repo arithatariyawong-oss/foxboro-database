@@ -638,7 +638,7 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
     <div class="crumb" id="crumb"></div>
     <div class="qwrap">
       <label class="search">
-        <input id="q" placeholder="ค้นหา tag / compound / station…" autocomplete="off">
+        <input id="q" placeholder="ค้นหา tag / compound / station… ใช้ * ได้" autocomplete="off">
         <i class="mag">⌕</i>
       </label>
       <div class="hits hide" id="hits"></div>
@@ -725,6 +725,30 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
    1. DECODE  —  base64 -> gzip -> JSON  (works straight off file://)
    ======================================================================= */
 const $ = s => document.querySelector(s);
+
+/* ---- wildcard search --------------------------------------------------
+   A query stays a plain case-insensitive substring, exactly as it always
+   was, UNLESS it carries a wildcard: `*` is any run of characters and `?`
+   is exactly one. The pattern is left UNANCHORED either way, so `05F*065`
+   finds V501:05FRC065 without having to spell the compound out — anchoring
+   would make the obvious `05FRC*` match nothing, because every name here
+   begins with its compound.
+   Returns null for an empty query (meaning "no filter"), else a predicate.
+   The RegExp is compiled once per query and never per row: 77,010 rows
+   would otherwise pay for the compile on every keystroke, which is the
+   trap Intl.Collator set on this page before. */
+function foxMatch(q){
+  const s = (q == null ? '' : String(q)).trim();
+  if (!s) return null;
+  const str = v => String(v == null ? '' : v);
+  if (s.indexOf('*') === -1 && s.indexOf('?') === -1){
+    const needle = s.toUpperCase();
+    return v => str(v).toUpperCase().indexOf(needle) !== -1;
+  }
+  const re = new RegExp(s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                         .replace(/\*/g, '.*').replace(/\?/g, '.'), 'i');
+  return v => re.test(str(v));
+}
 const fmt = n => Number(n || 0).toLocaleString('en-US');
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1091,10 +1115,9 @@ function revealTree(){
 function pvRows(row, group, filter){
   if (row < 0) return null;
   const rows = rowValues(row);
-  const q = (filter || '').trim().toUpperCase();
+  const hit = foxMatch(filter);
   const keep = rows.filter(([k, v]) =>
-    k !== 'Source.Name' &&
-    (!q || k.toUpperCase().indexOf(q) >= 0 || v.toUpperCase().indexOf(q) >= 0));
+    k !== 'Source.Name' && (!hit || hit(k) || hit(v)));
   if (!group) return [['', keep]];
   const ref = PARAMS[val('TYPE', row)] || {}, sect = ref.s || {};
   const SEC = {I:'Inputs', O:'Outputs', D:'Data stores', X:'อื่น ๆ'};
@@ -1618,16 +1641,17 @@ $('#q').addEventListener('focus', () => { if ($('#hits').innerHTML) $('#hits').c
 function drawHits(raw){
   const box = $('#hits');
   if (raw.length < 2){ box.innerHTML = ''; box.classList.add('hide'); return; }
-  const up = raw.toUpperCase(), out = [];
+  const hit = foxMatch(raw), out = [];
+  if (!hit){ box.innerHTML = ''; box.classList.add('hide'); return; }
   for (const s of CPS){
-    if (s.n.toUpperCase().indexOf(up) >= 0)
+    if (hit(s.n))
       out.push(['station', s.n, fmt(s.rows.length) + ' block', {cp:CPN.get(s.n)}]);
     if (out.length >= 6) break;
   }
   const a = dense(iName), d = dictOf(iName);
   for (let i = 0; i < N && out.length < 14; i++){
     const c = a[i]; if (c < 0) continue;
-    if (d[c].toUpperCase().indexOf(up) >= 0)
+    if (hit(d[c]))
       out.push(['block', d[c], val('DESCRP', i) || val('TYPE', i), {r:i}]);
   }
   if (!out.length){ box.innerHTML = '<p class="empty">ไม่พบ</p>'; box.classList.remove('hide'); return; }

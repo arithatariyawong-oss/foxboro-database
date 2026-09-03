@@ -449,7 +449,7 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
           <option value="-1">Packed / ไม่มี register</option>
         </select></div>
       <div class="fld grow"><label for="q">ค้นหา</label>
-        <div class="search"><input id="q" placeholder="tag / register / คำอธิบาย / letterbug…" autocomplete="off"><i class="mag">⌕</i></div>
+        <div class="search"><input id="q" placeholder="tag / register / คำอธิบาย / letterbug… ใช้ * ได้" autocomplete="off"><i class="mag">⌕</i></div>
       </div>
     </div>
 
@@ -461,6 +461,30 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
+
+/* ---- wildcard search --------------------------------------------------
+   A query stays a plain case-insensitive substring, exactly as it always
+   was, UNLESS it carries a wildcard: `*` is any run of characters and `?`
+   is exactly one. The pattern is left UNANCHORED either way, so `05F*065`
+   finds V501:05FRC065 without having to spell the compound out — anchoring
+   would make the obvious `05FRC*` match nothing, because every name here
+   begins with its compound.
+   Returns null for an empty query (meaning "no filter"), else a predicate.
+   The RegExp is compiled once per query and never per row: 77,010 rows
+   would otherwise pay for the compile on every keystroke, which is the
+   trap Intl.Collator set on this page before. */
+function foxMatch(q){
+  const s = (q == null ? '' : String(q)).trim();
+  if (!s) return null;
+  const str = v => String(v == null ? '' : v);
+  if (s.indexOf('*') === -1 && s.indexOf('?') === -1){
+    const needle = s.toUpperCase();
+    return v => str(v).toUpperCase().indexOf(needle) !== -1;
+  }
+  const re = new RegExp(s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                         .replace(/\*/g, '.*').replace(/\?/g, '.'), 'i');
+  return v => re.test(str(v));
+}
 
 async function inflate(b64){
   const bin = atob(b64), n = bin.length, u8 = new Uint8Array(n);
@@ -500,29 +524,29 @@ function devVisible(di){
   return true;
 }
 function filteredPts(){
-  const needle = q.trim().toLowerCase();
+  const hit = foxMatch(q);
   return PTS.filter(p => {
     if (!devVisible(p[0])) return false;
     if (fDir  && String(p[1]) !== fDir) return false;
     if (fBank && String(p[3]) !== fBank) return false;
-    if (needle){
+    if (hit){
       const d = DEVS[p[0]];
       const hay = (p[6] + " " + p[7] + " " + p[2] + " " + p[5] + " " +
                    d.dv + " " + GWS[d.g].lb + " " + (d.addr||"")).toLowerCase();
-      if (!hay.includes(needle)) return false;
+      if (!hit(hay)) return false;
     }
     return true;
   });
 }
 function filteredDevs(){
-  const needle = q.trim().toLowerCase();
+  const hit = foxMatch(q);
   return DEVS.map((d,i) => i).filter(di => {
     if (!devVisible(di)) return false;
-    if (needle){
+    if (hit){
       const d = DEVS[di];
       const hay = (d.dv + " " + d.nm + " " + GWS[d.g].lb + " " + (d.addr||"") + " " +
                    d.proto + " " + d.ds).toLowerCase();
-      if (!hay.includes(needle)) return false;
+      if (!hit(hay)) return false;
     }
     if (fDir === "0" && !d.in)  return false;
     if (fDir === "1" && !d.out) return false;

@@ -316,7 +316,7 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
     </div>
     <div class="tools">
       <label class="search">
-        <input id="q" placeholder="ค้นหา tag เช่น 05FRC065, 01PIC130…" autocomplete="off">
+        <input id="q" placeholder="ค้นหา tag เช่น 05FRC065, 05F*065…" autocomplete="off">
         <i class="mag">⌕</i>
         <div class="results" id="results"></div>
       </label>
@@ -360,6 +360,30 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
+
+/* ---- wildcard search --------------------------------------------------
+   A query stays a plain case-insensitive substring, exactly as it always
+   was, UNLESS it carries a wildcard: `*` is any run of characters and `?`
+   is exactly one. The pattern is left UNANCHORED either way, so `05F*065`
+   finds V501:05FRC065 without having to spell the compound out — anchoring
+   would make the obvious `05FRC*` match nothing, because every name here
+   begins with its compound.
+   Returns null for an empty query (meaning "no filter"), else a predicate.
+   The RegExp is compiled once per query and never per row: 77,010 rows
+   would otherwise pay for the compile on every keystroke, which is the
+   trap Intl.Collator set on this page before. */
+function foxMatch(q){
+  const s = (q == null ? '' : String(q)).trim();
+  if (!s) return null;
+  const str = v => String(v == null ? '' : v);
+  if (s.indexOf('*') === -1 && s.indexOf('?') === -1){
+    const needle = s.toUpperCase();
+    return v => str(v).toUpperCase().indexOf(needle) !== -1;
+  }
+  const re = new RegExp(s.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                         .replace(/\*/g, '.*').replace(/\?/g, '.'), 'i');
+  return v => re.test(str(v));
+}
 
 /* =======================================================================
    1. DATA
@@ -863,12 +887,12 @@ async function openProps(n){
 
 function paintProps(n){
   if (!propsEl) return;
-  const q = propsEl.querySelector('#pq').value.trim().toUpperCase();
+  const hit = foxMatch(propsEl.querySelector('#pq').value);
   const ref = PINS[TYPE(n)] || {}, sect = ref.s || {}, desc = ref.d || {};
   const groups = { I: [], O: [], D: [], X: [] };
   for (const [k, v] of propsRows){
     if (k === 'Source.Name') continue;
-    if (q && k.toUpperCase().indexOf(q) === -1 && v.toUpperCase().indexOf(q) === -1) continue;
+    if (hit && !hit(k) && !hit(v)) continue;
     (groups[sect[k]] || groups.X).push([k, v]);
   }
   let html = '';
@@ -945,16 +969,14 @@ world.addEventListener('mouseleave', () => { hot(null); tip.classList.remove('on
 /* ---- search ---- */
 let hits = [], sel = -1;
 function search(){
-  const q = $('#q').value.trim().toUpperCase();
-  if (q.length < 2){ $('#results').innerHTML = ''; hits = []; return; }
+  const raw = $('#q').value.trim(), hit = foxMatch(raw);
+  if (raw.length < 2 || !hit){ $('#results').innerHTML = ''; hits = []; return; }
   hits = [];
-  for (let i = 0; i < NODES.length && hits.length < 60; i++){
-    const n = NODES[i][0];
-    if (n.toUpperCase().indexOf(q) !== -1) hits.push(i);
-  }
-  if (!hits.length){
+  for (let i = 0; i < NODES.length && hits.length < 60; i++)
+    if (hit(NODES[i][0])) hits.push(i);
+  if (!hits.length){                            // fall back to the description
     for (let i = 0; i < NODES.length && hits.length < 60; i++)
-      if ((NODES[i][2] || '').toUpperCase().indexOf(q) !== -1) hits.push(i);
+      if (hit(NODES[i][2] || '')) hits.push(i);
   }
   sel = -1;
   $('#results').innerHTML = hits.map((i, k) =>
