@@ -130,6 +130,8 @@ a{color:inherit}
   font-size:13.5px; font-weight:700; box-shadow:var(--lift-sm), var(--inset-hi);
   transition:background .14s ease, transform .14s ease;
 }
+.btn.amber{background:var(--amber); color:var(--amber-ink); border-color:transparent}
+.btn.amber:hover{filter:brightness(1.06)}
 .btn:hover{background:var(--btn-hover)}
 .btn:active{transform:translateY(1px); box-shadow:var(--press)}
 .btn:focus-visible{outline:3px solid var(--mint-ring); outline-offset:2px}
@@ -367,6 +369,7 @@ td .dim{color:var(--text-dim); font-size:12.5px}
       <p class="lede" id="lede"></p>
     </div>
     <div class="tools">
+      <button class="btn amber" id="clearBtn">Clear all filters</button>
       <button class="btn" id="csvBtn">Export CSV</button>
       <button class="btn icon" id="themeBtn" title="สลับธีมสว่าง/มืด">◐</button>
     </div>
@@ -505,6 +508,15 @@ let tab = "mods";
 let sortBy = "name";
 let areaSel = "";
 let qSys = "";
+
+/* Everything that hides a row, back to how the page opens. The TAB is
+   not one of them -- clearing a filter should not also throw away
+   whether you were reading Modules or Spare points. */
+function clearAll(){
+  cur = -1; sortBy = "name"; areaSel = ""; qSys = ""; spareCls = "";
+  const q = document.querySelector("#qSys"); if (q) q.value = "";
+  drawRail(); drawView(); drawKpis();
+}
 
 /* =======================================================================
    3. ROLLUPS
@@ -941,6 +953,7 @@ $("#view").addEventListener("click", e => {
     drawView();
   }
 });
+$("#clearBtn").addEventListener("click", clearAll);
 $("#csvBtn").addEventListener("click", csv);
 $("#themeBtn").addEventListener("click", () => {
   const d = document.documentElement.getAttribute("data-theme") === "dark";

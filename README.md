@@ -198,6 +198,28 @@ python build/build_modbus_page.py
 `build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
 (ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
 
+## ปุ่ม Clear all filters
+
+ทุกหน้าที่มีการกรอง มีปุ่มสีเหลืองอำพัน **`Clear all filters`** อยู่มุมขวาบน
+ข้าง ๆ `Export CSV` ตำแหน่งเดียวกันทุกหน้า กดแล้วกลับไปสภาพตอนเปิดหน้าพอดี
+
+| หน้า | ล้างอะไรบ้าง |
+|---|---|
+| **TAG SEARCH** | ค้นหา NAME / DESCRP · chip ของ AREA · TYPE · CP · **และช่องค้นหาเล็ก ๆ ที่กรองรายการ chip เอง** (`qType`/`qCp`/`qCol`) |
+| **FBM (I/O) MODULE MANAGEMENT** | system ที่เลือก · AREA · ค้นหา system · การเรียงลำดับ · chip ชนิด spare point |
+| **MODBUS COMMUNICATION** | select ทั้งห้า (CP · gateway · device · ทิศทาง · register bank) และช่องค้นหา |
+| **SYSTEM MANAGER** | อุปกรณ์ที่เลือก · Blocks Types · ช่องกรองใน Block Properties · ช่องค้นหา |
+| **SEQUENCE VIEW** | ช่องกรอง parameter · ช่องค้นในซอร์ส |
+
+**แท็บไม่ใช่ filter จึงไม่ถูกล้าง** — หน้า MODBUS ยังอยู่แท็บเดิม หน้า FBM ยังอยู่
+Modules หรือ Spare points ตามที่กำลังอ่าน · การล้าง filter ไม่ควรทำให้เสียตำแหน่งที่ดูอยู่
+
+ของเดิม TAG SEARCH มีปุ่มนี้อยู่แล้วแต่ **ไม่ได้ล้างช่องค้นหาของ chip** —
+กดล้างแล้วแถบ TYPE ยังเหลือ 4 จาก 69 ชนิดโดยไม่มีอะไรบนจอบอกว่าทำไม ตอนนี้ล้างครบ
+
+`signal-map.html` กับ `logic-view.html` **ไม่มีปุ่มนี้โดยตั้งใจ** — สองหน้านั้นมีแต่ช่องค้นหา
+ที่ใช้*กระโดดไป*หา tag ไม่ได้ซ่อนแถวอะไร ปุ่มชื่อ clear all filters จึงไม่มีอะไรให้ล้าง
+
 ## ค่าเริ่มต้นของสองหน้านี้ (แก้ 2026-09-04)
 
 **SIGNAL MAP เปิดมาที่ความยาวโซ่ = 1** (เดิม 4) — เห็นบล็อกที่เลือกกับสิ่งที่ต่อกับมันตรง ๆ
@@ -392,6 +414,7 @@ python build/build_sequence_view_page.py
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/add_clear_filters.py` | ปุ่ม Clear all filters ทั้ง 5 หน้าที่มีการกรอง |
 | `build/quiet_default_views.py` | SIGNAL MAP เริ่มที่โซ่ชั้น 1 · SYSTEM MANAGER ไม่เติมหกเพนจนกว่าจะเลือกอุปกรณ์ |
 | `build/add_jove_to_graph.py` | สอน `export_graph.py` ให้อ่าน Jove export (รันครั้งเดียว) |
 | `build/style_jove_nodes.py` | สี/legend/Properties ของ Jove node ใน `signal-map.html` |

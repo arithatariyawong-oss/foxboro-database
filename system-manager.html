@@ -130,6 +130,8 @@ a{color:inherit}
   font-size:13.5px; font-weight:700; box-shadow:var(--lift-sm), var(--inset-hi);
   transition:background .14s ease, transform .14s ease;
 }
+.btn.amber{background:var(--amber); color:var(--amber-ink); border-color:transparent}
+.btn.amber:hover{filter:brightness(1.06)}
 .btn:hover{background:var(--btn-hover)}
 .btn:active{transform:translateY(1px); box-shadow:var(--press)}
 .btn:focus-visible{outline:3px solid var(--mint-ring); outline-offset:2px}
@@ -619,6 +621,7 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
       <p class="lede" id="lede"></p>
     </div>
     <div class="tools">
+      <button class="btn amber" id="clearBtn">Clear all filters</button>
       <button class="btn" id="csvBtn">Export CSV</button>
       <button class="btn icon" id="themeBtn" title="สลับธีมสว่าง/มืด">◐</button>
     </div>
@@ -1562,6 +1565,22 @@ function gotoRow(r){
   render();
 }
 
+/* Scope is the dominant filter on this page, so clearing goes all the
+   way back to nothing-picked -- which is also how the page opens, and
+   was otherwise a state with no way to return to it. */
+function clearAll(){
+  picked = false;
+  selCp = -1; selComp = -1; selType = ''; selBlk = -1;
+  selMod = -1; MODROWS = null;
+  blkCap = cmpCap = 300; pFilter = '';
+  expanded = new Set(['net']);
+  for (const id of ['#q', '#pq']){
+    const el = $(id); if (el) el.value = '';
+  }
+  const ns = $('#netSel'); if (ns) ns.value = '-1';
+  render();
+}
+
 const PICK_ME = '<p class="empty">เลือกอุปกรณ์จากผังทางซ้าย '
   + '(station · FBM · ช่องสัญญาณ) เพื่อดูข้อมูลส่วนนี้</p>';
 function render(){
@@ -1727,6 +1746,7 @@ $('#themeBtn').addEventListener('click', () => {
 try { const t = localStorage.getItem('fox-theme');
       if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
 
+$('#clearBtn').addEventListener('click', clearAll);
 $('#csvBtn').addEventListener('click', () => {
   if (!lastRows || !lastRows.length) return;
   const qv = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;

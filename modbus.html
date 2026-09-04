@@ -130,6 +130,8 @@ a{color:inherit}
   font-size:13.5px; font-weight:700; box-shadow:var(--lift-sm), var(--inset-hi);
   transition:background .14s ease, transform .14s ease;
 }
+.btn.amber{background:var(--amber); color:var(--amber-ink); border-color:transparent}
+.btn.amber:hover{filter:brightness(1.06)}
 .btn:hover{background:var(--btn-hover)}
 .btn:active{transform:translateY(1px); box-shadow:var(--press)}
 .btn:focus-visible{outline:3px solid var(--mint-ring); outline-offset:2px}
@@ -402,6 +404,7 @@ main{display:flex; flex-direction:column; gap:16px; min-width:0}
       <p class="lede" id="lede"></p>
     </div>
     <div class="tools">
+      <button class="btn amber" id="clearBtn">Clear all filters</button>
       <button class="btn" id="csvBtn">Export CSV</button>
       <button class="btn icon" id="themeBtn" title="สลับธีมสว่าง/มืด">◐</button>
     </div>
@@ -513,6 +516,18 @@ const cpOfDev  = d => CPS[GWS[DEVS[d].g].c];
 /* ---- state -------------------------------------------------------- */
 let tab = "points";
 let fCP = "", fGW = "", fDev = "", fDir = "", fBank = "", q = "";
+
+/* All five selects and the search. The tab is left where it was. */
+function clearAll(){
+  fCP = fGW = fDev = fDir = fBank = q = "";
+  shown = 800;
+  const s = document.querySelector("#q"); if (s) s.value = "";
+  rebuildSelects();
+  for (const id of ["#fDir", "#fBank"]){
+    const el = document.querySelector(id); if (el) el.value = "";
+  }
+  draw();
+}
 let shown = 800;
 
 /* ---- filtering --------------------------------------------------- */
@@ -715,6 +730,7 @@ $("#q").addEventListener("input", e => { q = e.target.value; shown = 800; draw()
 $("#view").addEventListener("click", e => {
   if (e.target.closest("#moreBtn")){ shown += 1600; draw(); }
 });
+$("#clearBtn").addEventListener("click", clearAll);
 $("#csvBtn").addEventListener("click", csv);
 $("#themeBtn").addEventListener("click", () => {
   const d = document.documentElement.getAttribute("data-theme") === "dark";

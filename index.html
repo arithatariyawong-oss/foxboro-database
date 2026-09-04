@@ -731,7 +731,12 @@ function clearAll(){
   state.q.name = state.q.desc = '';
   state.sort.ci = null;
   $('#qName').value = $('#qDesc').value = '';
+  /* The chip rails have search boxes of their own, and leaving them
+     full after a clear shows TYPE cut down to 4 of 69 with nothing
+     on screen to say why. They are filters too. */
+  $('#qType').value = $('#qCp').value = $('#qCol').value = '';
   ['area','type','cp'].forEach(paintChips);
+  paintColList();
   refresh();
 }
 $('#clearBtn').addEventListener('click', clearAll);

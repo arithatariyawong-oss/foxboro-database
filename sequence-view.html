@@ -117,6 +117,8 @@ button,input{font:inherit; color:inherit}
   font-size:13.5px; font-weight:700; box-shadow:var(--lift-sm), var(--inset-hi);
   transition:background .14s ease, transform .14s ease;
 }
+.btn.amber{background:var(--amber); color:var(--amber-ink); border-color:transparent}
+.btn.amber:hover{filter:brightness(1.06)}
 .btn:hover{background:var(--btn-hover)}
 .btn:active{transform:translateY(1px); box-shadow:var(--press)}
 .btn:disabled{opacity:.4; cursor:default}
@@ -508,6 +510,7 @@ body{padding:10px}
       <i class="mag">⌕</i>
       <div class="results" id="results"></div>
     </label>
+    <button class="btn amber" id="clearBtn">Clear all filters</button>
     <button class="btn icon" id="themeBtn" title="สลับธีม">◐</button>
   </div>
 
@@ -853,6 +856,17 @@ document.addEventListener('click', e => {
 });
 
 $('#fProps').addEventListener('input', () => { if (CUR) paintProps(CUR, $('#fProps').value); });
+
+/* the parameter filter and the find-in-source box; the block you are
+   looking at is not a filter and stays put */
+function clearAll(){
+  $('#fProps').value = '';
+  $('#fSrc').value = '';
+  srcHits = []; srcAt = -1; srcQ = '';
+  $('#srcBody').querySelectorAll('.lrow.marked').forEach(el => el.classList.remove('marked'));
+  if (CUR) paintProps(CUR, '');
+}
+$('#clearBtn').addEventListener('click', clearAll);
 
 /* ---- find in source: Enter walks the hits, it does not re-filter ---- */
 let srcHits = [], srcAt = -1, srcQ = '';
