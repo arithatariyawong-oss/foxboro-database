@@ -198,6 +198,107 @@ python build/build_modbus_page.py
 `build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
 (ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
 
+## LOGIC VIEW
+
+หน้า **`logic-view.html`** — โปรแกรม `STEP01–STEP50` ของบล็อก CALC / CALCA / LOGIC / MATH
+วาดเป็นผังเกตแบบ ICC (`12.png`) · **ไม่มีในแถบเมนู** เปิดจากการคลิกขวาบล็อกใน SIGNAL MAP
+มี 4,232 บล็อกที่มีโปรแกรม
+
+**โปรแกรมที่มี branch ก็วาดได้แล้ว** (แก้ 2026-09-04) — เดิมหน้านี้ยอมแพ้ทันทีที่เจอ
+`GTO / BIF / BIN / BIZ / BIT / BII / EXIT / SSx` ซึ่งคือ **2,280 จาก 4,232 โปรแกรม**
+รวมทุกตัว interlock ของ MOV (`PS1F203MOV1:130MOV059VPL` และพี่น้องอีก ~750 ตัว)
+
+เหตุผลที่ทำได้ อยู่ใน **B0193AX Rev U §14.8.1**
+
+> "Unconditional transfer of control is supported only in a **forward** direction;
+> looping backwards is not allowed."
+
+และหน้า opcode ทุกตัวย้ำอีกว่า กระโดดไป step ที่ ≤ step ปัจจุบัน จะเขียน `-4`
+(invalid goto syntax error) ลง `PERROR` · **ผัง control flow ของโปรแกรมที่ถูกต้อง
+จึงเป็น DAG ที่วิ่งไปข้างหน้าอย่างเดียว ไม่มีลูป** ตรวจกับของจริงแล้ว: ทั้งโรงงาน
+**ไม่มี backward jump และไม่มี `GTI` เลยสักตัว**
+
+วิธีวาด — ตัดโปรแกรมที่ทุก branch เป็น **basic block** (ตัวเริ่มบล็อกคือ step 1,
+ปลายทางของ branch ทุกอัน และ step ที่ตกมาจากคำสั่งควบคุม) แล้ววาดแต่ละบล็อกด้วย
+เครื่องวาดผังเกตตัวเดิมทั้งดุ้น · **26,215 บล็อกในโรงงาน คอมไพล์ผ่านหมด 100%**
+จากนั้นเรียงบล็อกเป็น flowchart หนึ่ง rank ต่อหนึ่งชั้นของ DAG
+
+- บล็อกที่จบด้วย branch มี **กล่องตัดสินใจหกเหลี่ยม** อยู่ท้ายผัง ป้อนด้วยค่า accumulator
+  ตรงนั้น (branch ไม่ pop — ทุก opcode เขียนว่า `sptr(after) = sptr(before)`)
+  เงื่อนไขเอามาจากคู่มือตรง ๆ: `BIF`/`BIZ` = 0 · `BIT` ≠ 0 · `BIN` < 0 ·
+  `BIP` ≥ 0 (บวก**หรือศูนย์**) · `BII` = กำลัง initialize · `SSx` = ตั้งค่าแล้วข้าม 1 step
+- เส้น **ใช่** (เขียว) / **ไม่** (เทา) ออกจากใต้กล่องตัดสินใจ
+- กล่องที่กิน stack ลึกกว่าที่ตัวเองใส่ (อ่านค่าที่บล็อกก่อนหน้าค้างไว้) จะได้
+  **ชิปเส้นประ `↑ ค่าค้างจาก step ก่อน`** ไม่ใช่ลากสายทะลุผนังกล่อง —
+  ด้วยเหตุผลเดียวกับกฎเดินสายของ `signal-map.html`
+- รายการ step ทางขวาถูกคั่นเป็นแถบตามบล็อกเดียวกัน อ่านคู่กับผังได้
+- โปรแกรมที่ไม่มี branch (1,952 ตัว) มีบล็อกเดียว วาดเหมือนเดิมทุกประการ ไม่มีกรอบ
+
+ผลลัพธ์: **วาดได้ 4,231 จาก 4,232** เหลือตัวเดียวคือ `SMS_SYS:SYS_COM3`
+ที่อ่าน BI01–BI07 แล้วไม่เขียนอะไรเลย — ไม่มีขาออกให้วาดจริง ๆ
+
+### ประกอบ LOGIC VIEW ใหม่
+
+```
+python build/export_logic.py
+python build/draw_branching_logic.py
+python build/layout_branching_logic.py
+python build/fix_branching_polish.py
+```
+
+สามตัวหลังต้องรันตามลำดับนี้ และรันบน `logic-view.html` ที่ยังไม่เคยรัน
+(ทุกตัว assert ว่าเจอ anchor พอดี 1 ที่ ถ้ารันซ้ำจะ ABORT ให้เอง)
+`draw_` คือความหมายจากคู่มือ · `layout_` คือเรขาคณิตของ flowchart ·
+`fix_` คือสามจุดที่เจอตอนลองใช้จริง
+
+## SEQUENCE VIEW
+
+หน้า **`sequence-view.html`** — หน้าจอ Block Detail ของ ICC สำหรับบล็อก **IND**
+(independent sequence) ตามภาพ `13.png` · **ไม่มีในแถบเมนู** เปิดได้สองทาง
+
+- ตาราง **TAG SEARCH** → คลิกชื่อ tag → *เปิด Sequence View* (ขึ้นเฉพาะแถวที่ TYPE = IND)
+- **SIGNAL MAP** → คลิกขวาที่บล็อก → *Sequence View…* (เปิดเป็น popup ทับผังเดิม)
+
+**ทำไมต้องมีหน้านี้** — บล็อก sequence ต่อสายด้วย *โค้ด* ไม่ใช่ด้วยค่าพารามิเตอร์
+record ของ `39FCP003_SQ:39ACP301` เป็นศูนย์ทั้งแถว ทั้งที่โปรแกรมมันเขียนไปหา
+`39ACP302.ACTIVE` และอ่านจาก `39BATCH3.II0005` — `graph.js` ซึ่งดูแต่ค่าพารามิเตอร์
+จึงมองไม่เห็นเลย และ SIGNAL MAP ของบล็อกพวกนี้ว่างเปล่า
+ข้อมูลการเชื่อมต่อทั้งหมดอยู่ในไฟล์ `.s` ใน `00 RAW DATABASE/S/S` ที่เดียว
+
+**สาม pane บนสุด — ตรงตาม `13.png`**
+
+| pane | อ่านยังไง |
+|---|---|
+| **Block Properties** | `Parameter \| Value` เรียงตามลำดับจริงใน record ของไฟล์ SaveAll (ไม่ใช่ลำดับคอลัมน์ของ `data.js`) · CP/COMPOUND/BLOCK เติมให้สามแถวบนสุดเหมือน ICC · ชื่อย่อจาก `USER_LABELS` ขึ้นใต้ชื่อ parameter |
+| **Input References** | `Input References \| Parameter` — อะไรวิ่งเข้ามาหาบล็อกนี้ |
+| **Output References** | `Parameter \| Output References` — บล็อกนี้ไปถึงอะไร |
+
+ป้าย **SEQ** สีเขียวหมายถึงแถวนั้นมาจากโค้ด ไม่ใช่จากค่าพารามิเตอร์ ·
+บล็อกเดียวกันขึ้นได้ *ทั้งสอง* pane และไม่ใช่บั๊ก — main sequence สั่ง
+`39ACP301.ACTIVE := TRUE` แล้ววนอ่านบิตเดิมด้วย `WAIT UNTIL` เพื่อรู้ว่าจบหรือยัง
+เป็นสายคนละเส้นจริง ๆ (`13.png` แสดงแบบนี้สามคู่)
+
+**pane ล่างคือซอร์ส `.s`** — เลขบรรทัด ไฮไลต์ syntax และ reference ทุกตัวคลิกได้
+สีเขียว = เขียนออก · สีฟ้า = อ่านเข้า · สีเทาขีดหยัก = หาปลายทางไม่ได้
+(ชื่อประกอบตอนรันอย่าง `:39FC'FC_NUM1'_AS:...` ซึ่ง ICC เองก็หาไม่ได้ 1,273 จุด
+หรือไม่มีบล็อกชื่อนั้นในดัมพ์ 256 จุด) · บรรทัดที่อ้างผ่าน `#define`
+เช่น `CBPSPT := Lprevspt;` ใน `01LY065.s` จะมีบรรทัดกำกับใต้ว่าจริง ๆ แล้วเขียนไปที่
+`V101:01LRCA065.SPT` · ลากแถบคั่นกลางเพื่อแบ่งความสูง (จำค่าไว้)
+
+### อัปเดตข้อมูล SEQUENCE VIEW
+
+```
+python build/export_sequence.py --check
+python build/build_sequence_view_page.py
+```
+
+`export_sequence.py` อ่านไฟล์ `.s` ทั้ง 779 ไฟล์ + ไฟล์ SaveAll `.txt` ทุก CP +
+`graph.js` แล้วเขียนทับ `sequence.js` (0.47 MB · 942 บล็อก) ·
+`--check` จะประกอบ `39FCP003_SQ:39ACP301` ขึ้นมาใหม่แล้วเทียบกับ `13.png`
+ทั้ง 4 แถว input, 5 แถว output และลำดับ parameter — ถ้าไม่ตรงให้แก้ parser ไม่ใช่แก้ assertion ·
+`build_sequence_view_page.py` ประกอบ `sequence-view.html` โดยยก `<style>`
+ทั้งก้อนมาจาก `logic-view.html` (ฟอนต์ + design token จะได้ไม่หลุดจากกัน)
+
 ## ไฟล์
 
 | ไฟล์ | คืออะไร |
@@ -210,14 +311,25 @@ python build/build_modbus_page.py
 | `systems.js` | ทะเบียนโมดูลและผังช่องสัญญาณ 1,436 โมดูล · 160 KB |
 | `modbus.html` | หน้า MODBUS COMMUNICATION — register IN/OUT ของ gateway serial/ethernet (ต้องมี `modbus.js`) |
 | `modbus.js` | 16,462 register point จาก 86 อุปกรณ์บน 65 gateway · 208 KB |
+| `logic-view.html` | หน้า LOGIC VIEW — ผังเกต + flowchart ของ step program (ต้องมี `logic.js`) ไม่อยู่ในแถบเมนู |
+| `logic.js` | step program ของ 4,232 บล็อก CALC/CALCA/LOGIC/MATH · 0.43 MB |
+| `sequence-view.html` | หน้า SEQUENCE VIEW — Block Detail ของบล็อก IND ตาม `13.png` (ต้องมี `sequence.js`) ไม่อยู่ในแถบเมนู |
+| `sequence.js` | 942 บล็อก sequence + ซอร์ส `.s` 779 ไฟล์ + reference ที่ถอดจากโค้ด · 0.47 MB |
 | `assets/fonts/` | SF Compact subset (woff2) ต้นฉบับของฟอนต์ที่ฝังไว้ใน `index.html` |
 | `05.jpg` | ต้นฉบับไอคอนบนแถบ filter |
 | `01.png`–`04.jpg` | ภาพอ้างอิงตอนออกแบบ (Power BI เดิม + style guide) |
 | `08.png`–`10.png` | ภาพอ้างอิงหน้า SYSTEM MANAGER (Foxboro System Manager + Schneider System Auditor) |
+| `13.png` | ภาพอ้างอิงหน้า SEQUENCE VIEW — Block Detail ของ ICC (`39FCP003_SQ:39ACP301`) ใช้เป็น regression case ของ `export_sequence.py --check` |
 | `serve.cmd` | ตัวสำรองไว้เปิดผ่าน localhost |
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/export_logic.py` | สร้าง `logic.js` ใหม่จาก `data.js` + `graph.js` |
+| `build/draw_branching_logic.py` | ให้ LOGIC VIEW วาดโปรแกรมที่มี branch ได้ (ความหมายจาก B0193AX) |
+| `build/layout_branching_logic.py` | เรียง basic block เป็น flowchart + เดินเส้นควบคุม |
+| `build/fix_branching_polish.py` | แก้ backfill ที่วนไม่จบ · จุดออกของเส้น ใช่/ไม่ · `fit()` เร็วไป |
+| `build/export_sequence.py` | สร้าง `sequence.js` ใหม่จาก `00 RAW DATABASE/S/S/*.s` + ไฟล์ SaveAll + `graph.js` (`--check` เทียบกับ `13.png`) |
+| `build/build_sequence_view_page.py` | ประกอบ `sequence-view.html` จาก `<style>` ของ `logic-view.html` |
 | `build/build_modbus_page.py` | ประกอบ `modbus.html` จาก `<head>` ของ `system-monitor.html` |
 | `build/build_system_manager_page.py` | ประกอบ `system-manager.html` จาก `<head>` เดียวกัน |
 | `build/add_page_nav.py` | ใส่/ซิงก์แถบเมนูทุกหน้า และเปลี่ยนชื่อหน้าที่สาม |
