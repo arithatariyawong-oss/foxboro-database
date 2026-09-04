@@ -907,6 +907,12 @@ function openTagMenu(row, tag, cx, cy){
       `<span>${esc(ty)}${ds ? ' · ' + esc(ds) : ''}</span></div>` +
     `<button data-a="props">ดู Properties<i>ค่าภายใน</i></button>` +
     `<a href="signal-map.html?tag=${encodeURIComponent(tag)}">เปิด signal map<i>ผังสัญญาณ</i></a>` +
+    /* Only IND blocks have an HLBL program, and every one of them does.
+       This is the dependable way in: a sequence block is usually absent
+       from the signal map entirely (its parameter record references
+       nothing), so the map's own menu cannot offer it. */
+    (ty === 'IND'
+      ? `<a href="sequence-view.html?tag=${encodeURIComponent(tag)}">เปิด Sequence View<i>โปรแกรม + reference</i></a>` : '') +
     `<button data-a="copy">คัดลอกชื่อ tag</button>`;
   document.body.appendChild(el);
   const r = el.getBoundingClientRect();
