@@ -198,6 +198,23 @@ python build/build_modbus_page.py
 `build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
 (ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
 
+## ค่าเริ่มต้นของสองหน้านี้ (แก้ 2026-09-04)
+
+**SIGNAL MAP เปิดมาที่ความยาวโซ่ = 1** (เดิม 4) — เห็นบล็อกที่เลือกกับสิ่งที่ต่อกับมันตรง ๆ
+เท่านั้น สี่ชั้นบนบล็อกที่ต่อเยอะคือกำแพง 150 กล่อง ต้องลากกลับลงมาก่อนทุกที
+จะกางเพิ่มก็ลาก slider ทีเดียว
+
+**SYSTEM MANAGER ไม่เดาให้ว่าจะดู station ไหน** — เดิม boot เรียก `pickCp(0)`
+แล้วเติมหกเพนด้วยข้อมูล station ที่บังเอิญเรียงมาก่อน ตอนนี้ **Compound List /
+Blocks Types / Block List / Compound Properties / Parameter / Block Properties
+จะว่างไว้จนกว่าจะกดเลือกอุปกรณ์จากผังทางซ้าย** (station · FBM · ช่องสัญญาณ) ·
+Foxboro Network กับผังอุปกรณ์ยังวาดตามปกติ เพราะสองอันนั้นคือตัวที่ใช้เลือก ·
+Block Mapping มีข้อความ "เลือก block จาก Block List" ของตัวเองอยู่แล้ว
+
+ไม่ใช่แค่ซ่อน — หกเพนนั้นถูก **ข้ามไม่คำนวณ** ตอนยังไม่ได้เลือก
+ซึ่งบน ALL NETWORK คือไม่ต้องไล่ 77,010 แถวเพื่อสร้างตารางที่ยังไม่มีใครถาม ·
+ลิงก์ตรง `?tag=` และ `?cp=` ยังเข้าหน้าเดิมทุกอย่าง เพราะการกดลิงก์ก็คือการเลือกแล้ว
+
 ## Jove (OPC / historian) ใน SIGNAL MAP
 
 เพิ่ม 2026-09-04 · SIGNAL MAP มีปลายทางที่สามแล้ว นอกจาก **บล็อก** (สีฟ้า)
@@ -375,6 +392,7 @@ python build/build_sequence_view_page.py
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/quiet_default_views.py` | SIGNAL MAP เริ่มที่โซ่ชั้น 1 · SYSTEM MANAGER ไม่เติมหกเพนจนกว่าจะเลือกอุปกรณ์ |
 | `build/add_jove_to_graph.py` | สอน `export_graph.py` ให้อ่าน Jove export (รันครั้งเดียว) |
 | `build/style_jove_nodes.py` | สี/legend/Properties ของ Jove node ใน `signal-map.html` |
 | `build/export_logic.py` | สร้าง `logic.js` ใหม่จาก `data.js` + `graph.js` |

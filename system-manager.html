@@ -955,6 +955,11 @@ let selCp = -1, selComp = -1, selType = '', selBlk = -1;
 /* selMod is the equipment rail's own scope: pick an FBM in the tree and
    the block panes narrow to what is landed on that module */
 let selMod = -1, MODROWS = null;
+/* Nothing is picked until the user picks it. The six block panes are
+   blank while this is false — see render(). It is NOT the same as
+   selCp === -1, which is the real, deliberate ALL NETWORK scope and
+   still fills them. */
+let picked = false;
 let blkCap = 300, cmpCap = 300;
 let pFilter = '';
 let depth = 1;
@@ -1506,6 +1511,7 @@ function fillNetSel(){
 function firstBlockOf(c){ return c && c.rows.length ? c.rows[0] : -1; }
 
 function pickCp(i){
+  picked = true;
   selCp = i; selComp = -1; selType = ''; selBlk = -1; selMod = -1; MODROWS = null;
   blkCap = cmpCap = 300; pFilter = '';
   const st = curSt();
@@ -1514,6 +1520,7 @@ function pickCp(i){
   render();
 }
 function pickComp(i, j){
+  picked = true;
   selCp = i; selComp = j; selType = ''; selMod = -1; MODROWS = null;
   selBlk = firstBlockOf(CPS[i].comps[j]);
   blkCap = 300; pFilter = '';
@@ -1523,6 +1530,7 @@ function pickComp(i, j){
 /* an FBM picked in the equipment rail scopes the block panes to what is
    landed on it — the tree's answer to "what is on this module" */
 function pickMod(mi){
+  picked = true;
   const ci = CPN.get(SYS[MODS[mi].s].n);
   if (ci === undefined) return;
   selCp = ci; selMod = mi; selComp = -1; selType = '';
@@ -1542,6 +1550,7 @@ function pickBlock(r){ selBlk = r; pFilter = ''; render(); }
 
 /* jump to any row: work the station and compound out of it */
 function gotoRow(r){
+  picked = true;
   const ci = CPN.get(val('CP NAME', r));
   if (ci === undefined) return;
   const st = CPS[ci], full = val('NAME', r), k = full.indexOf(':');
@@ -1553,8 +1562,21 @@ function gotoRow(r){
   render();
 }
 
+const PICK_ME = '<p class="empty">เลือกอุปกรณ์จากผังทางซ้าย '
+  + '(station · FBM · ช่องสัญญาณ) เพื่อดูข้อมูลส่วนนี้</p>';
 function render(){
-  drawTree(); drawNet(); drawCrumb(); drawParam(); drawClist(); drawCprops();
+  drawTree(); drawNet(); drawCrumb();
+  if (!picked){
+    /* Skipped, not hidden: on ALL NETWORK these three walk 77,010 rows
+       to build a compound list, a type histogram and a block table that
+       nobody has asked for yet. */
+    for (const id of ['param', 'clist', 'cprops', 'types', 'blist', 'bprops'])
+      $('#' + id).innerHTML = PICK_ME;
+    for (const id of ['nPar', 'nCmp', 'nBlk']) $('#' + id).textContent = '';
+    drawMap();
+    return;
+  }
+  drawParam(); drawClist(); drawCprops();
   drawTypes(); drawBlist(); drawBprops(); drawMap();
 }
 
@@ -1763,7 +1785,10 @@ $('#csvBtn').addEventListener('click', () => {
     let done = false;
     if (tag){ const r = nameRow(tag); if (r >= 0){ gotoRow(r); done = true; } }
     if (!done && cp && CPN.has(cp)){ pickCp(CPN.get(cp)); done = true; }
-    if (!done) pickCp(CPS.length ? 0 : -1);
+    /* No deep link means no choice has been made yet. Draw the rail and
+       the network — the two panes you choose FROM — and leave the rest
+       blank rather than answering for a station picked alphabetically. */
+    if (!done) render();
 
     $('#boot').classList.add('hide');
     $('#app').classList.remove('hide');
