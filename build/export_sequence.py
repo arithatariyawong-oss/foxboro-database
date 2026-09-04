@@ -21,7 +21,9 @@ Three inputs meet here:
   * `00 RAW DATABASE/S/S/*.s` -- the HLBL source. One file per sequence, named
     for the BLOCK, so a source deployed into several compounds (BOSS_1/BOSS_1A/
     ... reuse the same 24 NR_* programs) is one file serving many instances.
-  * `00 RAW DATABASE/*.txt` -- the SaveAll dumps, read instead of data.js
+  * `00 RAW DATABASE/CP All Systems/*.txt` -- the SaveAll dumps (they sat
+    loose in `00 RAW DATABASE/` until 2026-09-04; both layouts still
+    work, see dump_dir). Read instead of data.js
     because the dump is the only place the parameters stand in their true
     record order. That order is what ICC's Block Properties pane prints, and
     data.js's column list is a merge across all 1,202 columns of every block
@@ -58,6 +60,25 @@ WEB = os.path.dirname(HERE)
 ROOT = os.path.dirname(WEB)
 RAW = os.path.join(ROOT, "00 RAW DATABASE")
 SDIR = os.path.join(RAW, "S", "S")
+
+
+def dump_dir():
+    """Where the per-CP SaveAll .txt dumps live.
+
+    They moved into `CP All Systems/` on 2026-09-04. Both layouts are
+    accepted because guessing wrong here fails silently: no records means
+    no blocks, every reference then fails to resolve, and a sequence.js
+    still gets written with 942 empty blocks and no error raised.
+    """
+    for d in (os.path.join(RAW, "CP All Systems"), RAW):
+        if os.path.isdir(d) and any(f.lower().endswith(".txt")
+                                    for f in os.listdir(d)):
+            return d
+    sys.exit("ABORT: no SaveAll .txt dumps under %s (looked in\n"
+             "       CP All Systems/ and the folder itself)" % RAW)
+
+
+DUMPS = dump_dir()
 GRAPH = os.path.join(WEB, "graph.js")
 OUT = os.path.join(WEB, "sequence.js")
 
@@ -232,7 +253,8 @@ NAME_LINE = re.compile(r"^NAME\s*=\s*(.*)$")
 PROP_LINE = re.compile(r"^[ \t]+([A-Za-z_][A-Za-z0-9_]*)\s*=\s?(.*)$")
 
 n_rec = 0
-for fn in sorted(os.listdir(RAW)):
+print("SaveAll dumps: %s" % DUMPS)
+for fn in sorted(os.listdir(DUMPS)):
     if not fn.lower().endswith(".txt"):
         continue
     cp = os.path.splitext(fn)[0]          # the CPTCI dialect names it nowhere else
@@ -245,7 +267,7 @@ for fn in sorted(os.listdir(RAW)):
             blocks.append([name, cp, "", props])
         name = None
 
-    with open(os.path.join(RAW, fn), encoding="utf8", errors="replace") as fh:
+    with open(os.path.join(DUMPS, fn), encoding="utf8", errors="replace") as fh:
         for line in fh:
             line = line.rstrip("\n").rstrip("\r")
             m = CP_LINE.match(line)

@@ -430,7 +430,9 @@ python build/export_sequence.py --check
 python build/build_sequence_view_page.py
 ```
 
-`export_sequence.py` อ่านไฟล์ `.s` ทั้ง 779 ไฟล์ + ไฟล์ SaveAll `.txt` ทุก CP +
+`export_sequence.py` อ่านไฟล์ `.s` ทั้ง 779 ไฟล์ + ไฟล์ SaveAll `.txt` ทุก CP
+(อยู่ที่ `00 RAW DATABASE/CP All Systems/` — ย้ายมาจากรากโฟลเดอร์เมื่อ 2026-09-04
+สคริปต์รับได้ทั้งสองที่ และพิมพ์บอกว่าอ่านจากโฟลเดอร์ไหน) +
 `graph.js` แล้วเขียนทับ `sequence.js` (0.47 MB · 942 บล็อก) ·
 `--check` จะประกอบ `39FCP003_SQ:39ACP301` ขึ้นมาใหม่แล้วเทียบกับ `13.png`
 ทั้ง 4 แถว input, 5 แถว output และลำดับ parameter — ถ้าไม่ตรงให้แก้ parser ไม่ใช่แก้ assertion ·
@@ -471,7 +473,8 @@ python build/build_sequence_view_page.py
 | `build/draw_branching_logic.py` | ให้ LOGIC VIEW วาดโปรแกรมที่มี branch ได้ (ความหมายจาก B0193AX) |
 | `build/layout_branching_logic.py` | เรียง basic block เป็น flowchart + เดินเส้นควบคุม |
 | `build/fix_branching_polish.py` | แก้ backfill ที่วนไม่จบ · จุดออกของเส้น ใช่/ไม่ · `fit()` เร็วไป |
-| `build/export_sequence.py` | สร้าง `sequence.js` ใหม่จาก `00 RAW DATABASE/S/S/*.s` + ไฟล์ SaveAll + `graph.js` (`--check` เทียบกับ `13.png`) |
+| `build/export_sequence.py` | สร้าง `sequence.js` ใหม่จาก `00 RAW DATABASE/S/S/*.s` + `CP All Systems/*.txt` + `graph.js` (`--check` เทียบกับ `13.png`) |
+| `build/move_cp_dumps_folder.py` | ให้ `export_sequence.py` ตามไฟล์ SaveAll ไปที่ `CP All Systems/` |
 | `build/build_sequence_view_page.py` | ประกอบ `sequence-view.html` จาก `<style>` ของ `logic-view.html` |
 | `build/build_modbus_page.py` | ประกอบ `modbus.html` จาก `<head>` ของ `system-monitor.html` |
 | `build/build_system_manager_page.py` | ประกอบ `system-manager.html` จาก `<head>` เดียวกัน |
