@@ -198,6 +198,37 @@ python build/build_modbus_page.py
 `build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
 (ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
 
+## Foxboro Skill
+
+`.claude/skills/foxboro/` เก็บทุกอย่างที่เรียนรู้จากงานนี้ไว้เป็น **project skill**
+ของ Claude Code — เปิด session ใหม่ในโฟลเดอร์ `FOXBORO` แล้วมันจะโหลดให้เอง
+ไม่ต้องเล่าใหม่ทุกครั้ง
+
+```
+SKILL.md                         ภาพรวม · ที่อยู่ของทุกอย่าง · กฎยืนพื้น · คำสั่ง regenerate
+references/data-sources.md       ฟอร์แมตดิบ · dialect ของไฟล์ดัมพ์ · การ join · ชุดคู่มือ
+references/block-language.md     step language ของ B0193AX + control flow
+references/sequence-language.md  HLBL · บล็อก IND · ไฟล์ .s
+references/web-tool.md           7 หน้า · ไฟล์ข้อมูล · ธรรมเนียม build script · กฎเดินสาย
+references/house-style.md        ระบบ UI + กับดักของหน้าเว็บ offline
+```
+
+**ไฟล์จริงอยู่ในรีโปนี้ ส่วน `FOXBORO/.claude/skills/foxboro` เป็น junction ชี้มาหามัน**
+เพราะต้องอยู่สองที่พร้อมกันแต่ต้องไม่เป็นสองสำเนา — Claude Code หา skill จากโฟลเดอร์
+ที่เปิด session (ซึ่งคือ `FOXBORO` เพราะไฟล์ดิบกับคู่มืออยู่ที่นั่น) แต่ `FOXBORO`
+ไม่ใช่ git repo ถ้าเก็บไว้ที่นั่นอย่างเดียว โฟลเดอร์หาย skill หายด้วย
+
+แก้ผ่านทางไหนก็แก้ไฟล์เดียวกัน · git เห็นเฉพาะฝั่งรีโป เพราะ junction อยู่นอกรีโป
+
+**หลัง clone ใหม่ ให้รัน**
+
+```
+python build/link_skill.py
+```
+
+สร้าง junction ให้ (ไม่ต้องเป็น admin — junction ไม่ใช่ symlink) · รันซ้ำได้
+ถ้าลิงก์ถูกอยู่แล้วจะไม่ทำอะไร และจะ **ไม่ลบโฟลเดอร์จริง** ที่บังเอิญอยู่ตรงนั้น
+
 ## ตาราง Excel: ขาออกของบล็อกที่ไม่มีใครอ่าน
 
 ```
@@ -464,6 +495,7 @@ python build/build_sequence_view_page.py
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/link_skill.py` | สร้าง junction จาก `FOXBORO/.claude/skills/foxboro` มาที่รีโป (รันหลัง clone) |
 | `build/export_free_pins.py` | สร้าง `block-free-output-pins.xlsx` (ขาออกที่ไม่มีใครอ่าน) ไว้นอก repo |
 | `build/add_clear_filters.py` | ปุ่ม Clear all filters ทั้ง 5 หน้าที่มีการกรอง |
 | `build/quiet_default_views.py` | SIGNAL MAP เริ่มที่โซ่ชั้น 1 · SYSTEM MANAGER ไม่เติมหกเพนจนกว่าจะเลือกอุปกรณ์ |
