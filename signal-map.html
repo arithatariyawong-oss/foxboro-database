@@ -26,6 +26,7 @@
   --blk-head:#c9d8ef; --blk-head-edge:#7f9bc4; --blk-head-ink:#12314f;
   --blk-root:#bfe3cd; --blk-root-edge:#6bab86; --blk-root-ink:#123a24;
   --ecb-head:#f0dcb6; --ecb-edge:#c2a161; --ecb-ink:#4a3610;
+  --jove-head:#ded7f2; --jove-edge:#9b8ac9; --jove-ink:#2f2452;
   --pin-ink:#2c332f; --wire:#93a3ae; --wire-hot:#1f6f8b; --canvas:#f2efe6;
 
   --r-lg:28px; --r-md:20px; --r-sm:12px; --r-pill:100px;
@@ -49,6 +50,7 @@
   --blk-head:#33506f; --blk-head-edge:#5b81ad; --blk-head-ink:#dbe8f7;
   --blk-root:#2c5b42; --blk-root-edge:#5aa87c; --blk-root-ink:#d6f2e2;
   --ecb-head:#5a4a24; --ecb-edge:#a08745; --ecb-ink:#f4e6c6;
+  --jove-head:#3c3260; --jove-edge:#8878b8; --jove-ink:#e4dcf7;
   --pin-ink:#e2e6e4; --wire:#5d6f7b; --wire-hot:#6fc5e0; --canvas:#1a221f;
 
   --lift:0 1px 2px rgba(0,0,0,.34), 0 18px 40px -24px rgba(0,0,0,.7);
@@ -164,6 +166,9 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
 .blk.ecb .blk-head{fill:var(--ecb-head); stroke:var(--ecb-edge)}
 .blk.ecb .blk-face{stroke:var(--ecb-edge)}
 .blk.ecb .blk-name,.blk.ecb .blk-desc,.blk.ecb .blk-type{fill:var(--ecb-ink)}
+.blk.jove .blk-head{fill:var(--jove-head); stroke:var(--jove-edge)}
+.blk.jove .blk-face{stroke:var(--jove-edge)}
+.blk.jove .blk-name,.blk.jove .blk-desc,.blk.jove .blk-type{fill:var(--jove-ink)}
 .blk-name{font-size:11.5px; font-weight:800; fill:var(--blk-head-ink)}
 .blk.root .blk-name,.blk.root .blk-desc,.blk.root .blk-type{fill:var(--blk-root-ink)}
 .blk-desc{font-size:10px; fill:var(--blk-head-ink); opacity:.92}
@@ -193,6 +198,7 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
   45%    {stroke:var(--wire-hot); stroke-width:3.4}
 }
 .blk.ecb{--flash-base:var(--ecb-edge)}
+.blk.jove{--flash-base:var(--jove-edge)}
 .blk.flash .blk-face{animation:blkflash .62s ease-in-out 4}
 @media (prefers-reduced-motion:reduce){
   .blk.flash .blk-face{animation:none; stroke:var(--wire-hot); stroke-width:2.6}
@@ -365,6 +371,7 @@ a.btn.app-back span{font-size:15px; line-height:1; color:var(--accent)}
       <span><i class="root"></i>tag ที่เลือก</span>
       <span><i></i>บล็อกที่เชื่อมถึง</span>
       <span><i style="background:var(--ecb-head);border-color:var(--ecb-edge)"></i>ECB (โมดูล FBM)</span>
+      <span><i style="background:var(--jove-head);border-color:var(--jove-edge)"></i>Jove (OPC / historian)</span>
       <span><i style="background:var(--mint-deep);border-color:var(--mint-deep);width:4px;border-radius:2px"></i>ต้นทาง / ปลายทางของโซ่</span>
       <span style="opacity:.62">☰ = แสดงทุกขาที่บล็อกมี (ขาว่างเป็นสีจาง)</span>
     </div>
@@ -705,9 +712,10 @@ function render(L){
   for (const n of L.keep){
     const b = L.box.get(n), p = L.pins.get(n);
     const isRoot = n === root, isSrc = !fed.has(n), isSnk = !feeds.has(n);
-    const isEcb = TYPE(n).startsWith('ECB');
+    const isEcb = TYPE(n).startsWith('ECB'), isJove = TYPE(n) === 'JOVE';
     const nm = NAME(n), ds = DESC(n) || '', ty = TYPE(n);
-    let g = `<g class="blk${isRoot ? ' root' : ''}${isEcb ? ' ecb' : ''}" data-n="${n}"` +
+    let g = `<g class="blk${isRoot ? ' root' : ''}${isEcb ? ' ecb' : ''}`
+          + `${isJove ? ' jove' : ''}" data-n="${n}"` +
             ` transform="translate(${b.x},${b.y})">`;
     g += `<rect class="blk-face" x="0" y="0" width="${b.w}" height="${b.h}"></rect>`;
     if (isSrc){
@@ -1033,6 +1041,30 @@ async function openProps(n){
   $('#stage').appendChild(el);
   propsEl = el;
   el.querySelector('.props-close').addEventListener('click', closeProps);
+
+  /* A Jove object has no parameter record — field 7 is -1. Reading it out
+     of data.js would download 2.4 MB to walk 1,202 sparse columns looking
+     for a row that does not exist and come back empty. Everything a Jove
+     object has is already on the node and its edges. */
+  if (NODES[n][7] < 0){
+    const link = [];
+    for (const e of EDGES){
+      if (e[0] === n) link.push(['เขียนไปที่', NAME(e[2]) + '.' + e[3]]);
+      else if (e[2] === n) link.push(['อ่านจาก', NAME(e[0]) + '.' + e[1]]);
+    }
+    el.querySelector('.props-body').innerHTML =
+      `<div class="props-sec">Jove object</div>` +
+      [['ชื่อ object', NAME(n)], ['attribute', PNT(n)],
+       ['API host', CP(n)], ['คำอธิบาย', DESC(n) || '—']]
+        .map(([k, v]) => `<div class="prow"><div class="k">${esc(k)}</div>` +
+                         `<div class="v">${esc(v)}</div></div>`).join('') +
+      `<div class="props-sec">ผูกกับพารามิเตอร์</div>` +
+      (link.length
+        ? link.map(([k, v]) => `<div class="prow"><div class="k">${esc(k)}</div>` +
+            `<div class="v ref" data-go="${esc(v.split('.')[0])}">${esc(v)}</div></div>`).join('')
+        : `<p class="props-note">ไม่ได้ผูกกับบล็อกไหน</p>`);
+    return;
+  }
 
   try { await loadData(); } catch (err){
     el.querySelector('.props-body').innerHTML = `<p class="props-note">${esc(err.message)}</p>`;

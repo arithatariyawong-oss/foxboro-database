@@ -198,6 +198,57 @@ python build/build_modbus_page.py
 `build_modbus_page.py` ประกอบ `modbus.html` ใหม่จาก `<head>` ของ `system-monitor.html`
 (ฟอนต์ + design token เหมือนกันทุกหน้า) รันหลัง `export_data.py`
 
+## Jove (OPC / historian) ใน SIGNAL MAP
+
+เพิ่ม 2026-09-04 · SIGNAL MAP มีปลายทางที่สามแล้ว นอกจาก **บล็อก** (สีฟ้า)
+กับ **ECB/FBM** (สีเหลือง) ตอนนี้มี **Jove object** (สีม่วง) ด้วย
+
+ข้อมูลมาจาก `00 RAW DATABASE/Jove/*.exp` (Jove OBJECTS export v1.13)
+ในไฟล์มีสามส่วน คั่นด้วยบรรทัดขึ้นต้น `#`
+
+| ส่วน | จำนวน | ใช้ได้ไหม |
+|---|---|---|
+| Object Type 0 | 14,375 | object ที่ Jove คำนวณเอง (`.MAS-MISMATCH`, `.PUMP-WORD`) ไม่มีคอลัมน์ `Connection` — ไม่มีอะไรให้ join |
+| **Object Type 1** | **18,871** | **ตัวที่ต่อผ่าน OM/API — ส่วนนี้แหละที่ใช้** |
+| OPC UA | 0 | มีหัวตารางแต่ไม่มีข้อมูล |
+
+ทุกแถวในส่วนที่ 2 มีคอลัมน์ `Connection` เก็บ path เต็มของ Foxboro —
+`PS1MCR_MOV05:39MOV229.MA`, `13000F203DI1:130GBS165C.CIN` — **แปลงได้ครบทั้ง 18,871 แถว**
+ลงบนบล็อกจริง 18,502 แถว (98%) เหลือ 369 แถวที่ไม่เจอชื่อบล็อก (`T116_T:LEVEL` ฯลฯ)
+
+**ทิศทางอยู่ในไฟล์และสำคัญมาก** — `Buffered Read` / `Buffered Write` บอกว่า
+connection นั้นวิ่งทางไหน และ **Jove เขียนกลับเข้า DCS ถึง 5,985 เส้น**
+(write อย่างเดียว 4,146 + สองทาง 2,004) เช่น `39MOV229.FIELDCLOSE` →
+`PS1MCR_MOV05:39MOV229.AUTCLS` คือคำสั่งปิดวาล์วจากฝั่ง historian/API
+เส้นพวกนี้จึงวาดเข้าทางขาเข้าของบล็อก ส่วน 10,378 เส้นที่อ่านอย่างเดียววาดออกทางขาออก ·
+อีก 2,343 เส้นที่ไม่ติดธงทั้งคู่ วาดเป็น *อ่าน* — connection มีจริงแต่จะเรียกว่า
+command path โดยไม่มีอะไรยืนยันก็เป็นการเดา
+
+**สิ่งที่ได้เพิ่มมาจริง ๆ** — **4,027 บล็อกที่ก่อนหน้านี้ไม่มีสายอะไรเลยในผัง**
+(record ของมันไม่อ้างถึงใครและไม่มีใครอ้างถึง) ที่จริงต่อกับ Jove อยู่
+เมื่อก่อนเปิด SIGNAL MAP แล้วเจอจอว่าง ตอนนี้เห็นแล้ว
+
+หนึ่ง node ต่อหนึ่ง **Jove object** ไม่ใช่ต่อ prefix — `39MOV229` มี 8 object
+ห้อยจากบล็อกเดียว อ่านได้เหมือน PAKCIN fan-out ที่มีอยู่แล้ว ถ้าจับกลุ่มตาม prefix
+กล่อง `MOGAS` กล่องเดียวจะมี 291 ขา · ขาฝั่ง Jove คือชื่อ attribute (`CLOSE_SWITCH`)
+ฝั่ง Foxboro คือชื่อพารามิเตอร์ — ไวยากรณ์เดียวกับ ECB ที่ขาคือหมายเลขช่อง
+
+Jove object **ไม่มีแถวใน `data.js`** (field 7 = -1) กด Properties แล้วจะแสดง
+host / attribute / คำอธิบาย / พารามิเตอร์ที่ผูกอยู่ โดยไม่แตะ `data.js` เลย
+
+### อัปเดตข้อมูล Jove
+
+วางไฟล์ `.exp` ใหม่ลง `00 RAW DATABASE/Jove/` แล้ว
+
+```
+python build/export_graph.py
+```
+
+`export_graph.py` หยิบไฟล์ `.exp` ที่ชื่อใหม่สุดในโฟลเดอร์เอง (ชื่อไฟล์มีวันที่อยู่แล้ว)
+ไม่ต้องแก้อะไร · ถ้าโฟลเดอร์ว่างหรืออ่านไม่ได้ มันจะพิมพ์บอกแล้วสร้าง graph.js
+แบบไม่มี Jove ต่อไปตามปกติ · `graph.js` โตจาก 1.4 MB เป็น **1.9 MB**
+(82,897 node · 108,897 edge)
+
 ## LOGIC VIEW
 
 หน้า **`logic-view.html`** — โปรแกรม `STEP01–STEP50` ของบล็อก CALC / CALCA / LOGIC / MATH
@@ -324,6 +375,8 @@ python build/build_sequence_view_page.py
 | `build/export_data.py` | สร้าง `data.js` ใหม่จาก `FOX DATABASE.xlsx` |
 | `build/export_systems.py` | สร้าง `systems.js` ใหม่จาก `data.js` + ทะเบียนฮาร์ดแวร์ |
 | `build/export_modbus.py` | สร้าง `modbus.js` ใหม่จาก `data.js` |
+| `build/add_jove_to_graph.py` | สอน `export_graph.py` ให้อ่าน Jove export (รันครั้งเดียว) |
+| `build/style_jove_nodes.py` | สี/legend/Properties ของ Jove node ใน `signal-map.html` |
 | `build/export_logic.py` | สร้าง `logic.js` ใหม่จาก `data.js` + `graph.js` |
 | `build/draw_branching_logic.py` | ให้ LOGIC VIEW วาดโปรแกรมที่มี branch ได้ (ความหมายจาก B0193AX) |
 | `build/layout_branching_logic.py` | เรียง basic block เป็น flowchart + เดินเส้นควบคุม |

@@ -26,6 +26,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.dirname(HERE)
 DATA = os.path.join(WEB, "data.js")
 PARAMS = os.path.join(WEB, "block_params.json")
+# newest export in the folder, not a fixed filename -- these are dated
+# (jove_20260518_2.exp) and a new one arrives whenever Jove is re-exported
+import glob
+_j = sorted(glob.glob(os.path.join(os.path.dirname(WEB), "00 RAW DATABASE",
+                                   "Jove", "*.exp")))
+JOVE = _j[-1] if _j else ""
 OUT = os.path.join(WEB, "graph.js")
 
 t0 = time.time()
@@ -191,6 +197,62 @@ for i in range(N):
 print("hardware edges: %d  (%d I/O bindings had no ECB in the export)" % (n_hw, n_missed))
 print("edges total: %d  (%.1fs)" % (len(edges), time.time() - t0))
 
+# ---- Jove: the OM/API objects, and the parameters they are bound to -----
+# Section 1 of the export (Object Type 1) is the connected one. Parsed here
+# rather than after the keep-set is built, because 5,445 of these
+# connections are the ONLY thing touching their block -- freeze the keep-set
+# first and those blocks are dropped before Jove can put them back.
+import csv
+
+JREF = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)"
+                  r"(?:\.([A-Za-z0-9_]+))?$")
+jove = []                      # (obj, desc, host, attr, row, param, qual, is_write)
+j_miss = 0
+try:
+    jtext = open(JOVE, encoding='utf8', errors='replace', newline='').read()
+except OSError as e:
+    print('Jove export not read (%s) -- graph built without it' % e)
+    jtext = ''
+
+jsecs, jhdr, jcur = [], None, None
+for line in jtext.split('\r\n'):
+    if line.startswith('#'):
+        if jcur is not None:
+            jsecs.append((jhdr, jcur))
+        jhdr = next(csv.reader([line[1:]]))
+        jcur = []
+    elif jcur is not None and line.strip():
+        jcur.append(line)
+if jcur is not None:
+    jsecs.append((jhdr, jcur))
+
+for jh, jrows in jsecs:
+    ji = {c: k for k, c in enumerate(jh)}
+    if 'Connection' not in ji:            # type 0 and the empty OPC UA section
+        continue
+    for r in csv.reader(jrows):
+        if len(r) != len(jh):
+            continue
+        m = JREF.match(r[ji['Connection']])
+        if not m:
+            j_miss += 1
+            continue
+        row = by_full.get('%s:%s' % (m.group(1), m.group(2)))
+        if row is None:
+            j_miss += 1
+            continue
+        obj = r[ji['Name']]
+        wr = r[ji.get('Buffered Write', -1)] == 'true' if 'Buffered Write' in ji else False
+        rd = r[ji.get('Buffered Read', -1)] == 'true' if 'Buffered Read' in ji else False
+        attr = obj.split('.', 1)[1] if '.' in obj else obj
+        # both flags set is two real connections, one each way; neither set
+        # is still a configured link and is shown as a read
+        for is_write in ([True] if wr else []) + ([False] if rd or not wr else []):
+            jove.append((obj, r[ji['Description']], r[ji.get('API Host Name', 0)],
+                         attr, row, m.group(3), m.group(4) or '', is_write))
+print('Jove objects bound to a block: %d edges over %d objects (%d unresolved)'
+      % (len(jove), len({j[0] for j in jove}), j_miss))
+
 # ---- keep only the blocks the diagram can reach -------------------------
 used = set()
 for s, _, t, _, _ in edges:
@@ -199,6 +261,8 @@ for s, _, t, _, _ in edges:
 for i in range(N):                      # field I/O is an endpoint worth having
     if ioA[i] >= 0 and name[i]:
         used.add(i)
+for j in jove:                          # ...and so is anything Jove talks to
+    used.add(j[4])
 rows = sorted(used)
 remap = {r: k for k, r in enumerate(rows)}
 
@@ -216,6 +280,27 @@ nodes = [[
 # carry one, and padding the other 76% with "" would cost graph.js for nothing
 elist = [[remap[s], sp, remap[t], tp] + ([q] if q else [])
          for s, sp, t, tp, q in edges]
+
+# ---- the Jove objects, appended as nodes of their own -------------------
+# A Jove node has no data.js row, so field 7 is -1 and signal-map.html shows
+# the object's own attributes instead of trying to read a row that is not
+# there. Field 3 carries the API host, which is the only 'where it lives'
+# a Jove object has.
+jnode = {}
+n_jw = 0
+for obj, desc, host, attr, row, param, qual, is_write in jove:
+    if obj not in jnode:
+        jnode[obj] = len(nodes)
+        nodes.append([obj, 'JOVE', desc, host, '', '', attr, -1])
+    j, b = jnode[obj], remap[row]
+    # Jove writing INTO the DCS is a command path and is drawn as one
+    e = ([j, attr, b, param] if is_write else [b, param, j, attr])
+    if qual:
+        e.append(qual)
+    elist.append(e)
+    n_jw += 1 if is_write else 0
+print('Jove nodes %d, edges %d (%d of them Jove writing into the DCS)'
+      % (len(jnode), len(jove), n_jw))
 
 # ---- the pin reference, trimmed to what the diagram needs ---------------
 pins = {}
